@@ -1,0 +1,10 @@
+{
+    "base_url":"https://www.fitbit.com/",
+    "api_url":"https://api.fitbit.com",
+    "auth2_url":"https://fitbit.com/oauth2/authorize",
+    "client_id":"22B6CH",
+    "client_secret":"f0141c5800a7e85a9c30cd1c4062a52e",
+    "redirect_url":"https://www.312woodland.ddns.net/fitbit_callback.html",
+    "auth_scopes":"activity, profile, weight, heatrate, settings, sleep",
+    "token_expires":"607800"
+}
