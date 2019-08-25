@@ -105,15 +105,6 @@ if data['access_token'] == '':
 authd_client = fitbit.Fitbit(data['client_id'], data['client_secret'], access_token=data['access_token'])
 authd_client2 = fitbit.Fitbit(data['client_id'], data['client_secret'], oauth2=True, access_token=data['access_token'], refresh_token=data['refresh_token'])
 
-# Retrieve current profile
-#profile = authd_client2.user_profile_get()
-#if args.debug: print(json.dumps(profile, indent=4))
-
-# Get a list of devices associated with the accoutn
-#device_list = authd_client2.get_devices()
-#if args.debug: print(json.dumps(device_list, indent=2))
-
-
 # Retrieve the interval heart rate data and store in a panda data frame.  We grab the highest
 # fidelity we can which is at best 1 second.  Note that it may not be exactly 1 second.  We will basically be 
 # one day behind today, so we start at midnight yesterday and go to 23:59 yesterday
