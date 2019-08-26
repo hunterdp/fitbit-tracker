@@ -38,8 +38,12 @@ parser.add_argument('-a', '--all', help='collect all the data possible', action=
 parser.add_argument('--days', help='number of days to go back', 
                     action='store', type=int, dest='number_of_days', default='1')
 parser.add_argument('-d', '--debug', help='turn on debug messages', action='store_true', default=False)
+parser.add_argument('-e', '--end_date',  help='end date to collect data from', 
+                    action='store', type=str,  dest='end_date')                    
 parser.add_argument('-o', '--output',  help='output directory to store results files', 
                     action='store', type=str,  dest='output_dir', default='results')                    
+parser.add_argument('-s', '--start_date',  help='start date to collect data from (mm-dd-yy)', 
+                    action='store', type=str,  dest='start_date')                    
 parser.add_argument('-t', '--type', help='collect only the type of data specified (heartrate, sleep, steps)',
                     action='store', type=str, dest='collect_type')
 parser.add_argument('-v', '--version', help='prints the version', action='version', version=VERSION)
@@ -68,15 +72,22 @@ if not os.path.isdir(args.output_dir):
 else:
   output_dir = args.output_dir
 
+# Build the list of type of data to collect
+collect_type = [] 
+if args.collect_type:
+  collect_type = args.collect_type
+  print('Collecting information for: '+ args.collect_type)
+  if 'heartrate' in args.collect_type:
+    print('Collecting data for intraday heatrate')
+  if 'sleep' in args.collect_type:
+    print('Collecting sleep information')
+  if 'step' in args.collect_type:
+    print('Collecting step information')
+
 # define a few common dates
 today = datetime.today()
 yesterday = today - timedelta(days=number_of_days)
 yesterday_str = datetime.strftime(yesterday,"%Y-%m-%d")
-
-# Create the result file names
-heartrate_file = output_dir + '\\' + 'hr_intraday_' + yesterday_str + '.csv'
-steps_file = output_dir + '\\' + 'steps_intraday_' + yesterday_str + '.csv'
-sleep_file = output_dir + '\\' + 'sleep_day_' + yesterday_str + '.csv'
 
 # Open and read in the configuration information.  Note that the file must contain the following fields:
 #    "base_url":"https://www.fitbit.com/"
@@ -105,45 +116,50 @@ if data['access_token'] == '':
 authd_client = fitbit.Fitbit(data['client_id'], data['client_secret'], access_token=data['access_token'])
 authd_client2 = fitbit.Fitbit(data['client_id'], data['client_secret'], oauth2=True, access_token=data['access_token'], refresh_token=data['refresh_token'])
 
+# Collect the requested information.  Note that we are limited to 150 requests per day.  If we will exceed that, message back to the caller and exit.
+# Save the data into a local files.  We want to save the data on a per-day basis so use the naming convention YY-MM-DD.csv
+request_limit = 150
+
 # Retrieve the interval heart rate data and store in a panda data frame.  We grab the highest
 # fidelity we can which is at best 1 second.  Note that it may not be exactly 1 second.  We will basically be 
 # one day behind today, so we start at midnight yesterday and go to 23:59 yesterday
-hr_intraday = authd_client2.intraday_time_series('activities/heart', base_date=yesterday, start_time='00:00', end_time='23:59', detail_level='1sec')
-time_list = []
-value_list = []
-for i in hr_intraday['activities-heart-intraday']['dataset']:
-  value_list.append(i['value'])
-  time_list.append(i['time'])
-heartrate_df = pandas.DataFrame({'Time':time_list,'Heart Rate':value_list})
+if 'heartrate' in collect_type or 'all' in collect_type:
+  hr_intraday = authd_client2.intraday_time_series('activities/heart', base_date=yesterday, start_time='00:00', end_time='23:59', detail_level='1sec')
+  time_list = []
+  value_list = []
+  for i in hr_intraday['activities-heart-intraday']['dataset']:
+    value_list.append(i['value'])
+    time_list.append(i['time'])
+  heartrate_df = pandas.DataFrame({'Time':time_list,'Heart Rate':value_list})
+  heartrate_file = output_dir + '\\' + 'hr_intraday_' + yesterday_str + '.csv'
+  heartrate_df.to_csv(heartrate_file, columns=['Time','Heart Rate'], header=True, index=False)
+  print(heartrate_df.describe())
 
 # retrieve steps series and store in a panda data frame.  We will use a fidelity of 15 minutes.
-steps_intraday = authd_client2.intraday_time_series('activities/steps', base_date=yesterday, start_time='00:00', end_time='23:59', detail_level='15min')
-time_list = []
-value_list = []
-for i in steps_intraday['activities-steps-intraday']['dataset']:
-  value_list.append(i['value'])
-  time_list.append(i['time'])
-steps_df = pandas.DataFrame({'Time':time_list,'Steps':value_list})
+if 'steps' in collect_type:
+  steps_intraday = authd_client2.intraday_time_series('activities/steps', base_date=yesterday, start_time='00:00', end_time='23:59', detail_level='15min')
+  time_list = []
+  value_list = []
+  for i in steps_intraday['activities-steps-intraday']['dataset']:
+    value_list.append(i['value'])
+    time_list.append(i['time'])
+  steps_df = pandas.DataFrame({'Time':time_list,'Steps':value_list})
+  steps_file = output_dir + '\\' + 'steps_intraday_' + yesterday_str + '.csv'
+  steps_df.to_csv(steps_file, columns=['Time','Steps'], header=True, index=False)
+  print(steps_df.describe())
 
 # Retrieve the sleep data.  We need to translate the "value" if sleep into the different categories so
 # it can be aligned with the heartbeat data.  Maping for the values are: 1-asleep, 2-restless, 3-awake
-single_day_sleep = authd_client2.get_sleep(yesterday)
-time_list = []
-value_list = []
-for i in single_day_sleep['sleep'][0]['minuteData']:
-  value_list.append(i['value'])
-  time_list.append(i['dateTime'])
-sleep_df = pandas.DataFrame({'Time':time_list,'Sleep Type':value_list})
-
-# print out simple stats of the collections
-# TODO(dph): We should save this data somewhere although it is easily reproducable when the dataset is read back in
-print(heartrate_df.describe())
-print(steps_df.describe())
-print(sleep_df.describe())
-
-# Save the data into a local files.  We want to save the data on a per-day basis so use the naming convention YY-MM-DD.csv
-heartrate_df.to_csv(heartrate_file, columns=['Time','Heart Rate'], header=True, index=False)
-steps_df.to_csv(steps_file, columns=['Time','Steps'], header=True, index=False)
-sleep_df.to_csv(sleep_file, columns=['Time','Sleep Type'], header=True, index=False)
+if 'sleep' in collect_type:
+  single_day_sleep = authd_client2.get_sleep(yesterday)
+  time_list = []
+  value_list = []
+  for i in single_day_sleep['sleep'][0]['minuteData']:
+    value_list.append(i['value'])
+    time_list.append(i['dateTime'])
+  sleep_df = pandas.DataFrame({'Time':time_list,'Sleep Type':value_list})
+  sleep_file = output_dir + '\\' + 'sleep_day_' + yesterday_str + '.csv'
+  sleep_df.to_csv(sleep_file, columns=['Time','Sleep Type'], header=True, index=False)
+  print(sleep_df.describe())
 
 
