@@ -72,24 +72,82 @@ def get_sleep (oauth_client, start_date, results_file):
   return(df);
 
 ### MAIN PROGRAM STARTS HERE ###
+def set_command_options():
+  "Sets the command line arguments."
+  # Setup the valid arguments and then process.  Note we must have a configuration file.
+  usage = 'Retrieves various information from the Fitbit website.'
+  parser = argparse.ArgumentParser(prog='Fitbit Tracker', description=usage, formatter_class=argparse.RawDescriptionHelpFormatter)
+  parser.add_argument('configfile', help='Name of the configuration file. (default: %(default)s)', type=str, default='config.json')
+  parser.add_argument('-a', '--all', help='collect all the data possible', action='store_true')
+  parser.add_argument('--days', help='number of days to go back', action='store', type=int, dest='number_of_days', default='1')
+  parser.add_argument('-d', '--debug', help='Set the debug level [debug info warn] (default: %(default)s)', action='store', type=str, default='info')
+  parser.add_argument('-e', '--end_date',  help='end date to collect data from', action='store', type=str,  dest='end_date')                    
+  parser.add_argument('-l', '--log_file', help='Set the logfile name. (default: %(default)s)', action='store', type=str, default='fitbit-tracker.log')
+  parser.add_argument('-o', '--output',  help='output directory to store results files. (default: %(default)s)', action='store', type=str,  dest='output_dir', default='results')                    
+  parser.add_argument('-s', '--start_date',  help='start date to collect data from (mm-dd-yy)', action='store', type=str,  dest='start_date')                    
+  parser.add_argument('-t', '--type', help='collect only the type of data specified (heartrate, sleep, steps)', action='store', type=str, dest='collect_type')
+  parser.add_argument('-v', '--version', help='prints the version', action='version', version=VERSION)
+  args = parser.parse_args()
+  return(parser);
 
-# Setup the valid arguments and then process.  Note we must have a configuration file.
-usage = 'Retrieves various information from the Fitbit website.'
-parser = argparse.ArgumentParser(prog='Fitbit Tracker', description=usage, formatter_class=argparse.RawDescriptionHelpFormatter)
-parser.add_argument('configfile', help='Name of the configuration file. (default: %(default)s)', type=str, default='config.json')
-parser.add_argument('-a', '--all', help='collect all the data possible', action='store_true')
-parser.add_argument('--days', help='number of days to go back', action='store', type=int, dest='number_of_days', default='1')
-parser.add_argument('-d', '--debug', help='Set the debug level [debug info warn] (default: %(default)s)', action='store', type=str, default='info')
-parser.add_argument('-e', '--end_date',  help='end date to collect data from', action='store', type=str,  dest='end_date')                    
-parser.add_argument('-l', '--log_file', help='Set the logfile name. (default: %(default)s)', action='store', type=str, default='fitbit-tracker.log')
-parser.add_argument('-o', '--output',  help='output directory to store results files. (default: %(default)s)', action='store', type=str,  dest='output_dir', default='results')                    
-parser.add_argument('-s', '--start_date',  help='start date to collect data from (mm-dd-yy)', action='store', type=str,  dest='start_date')                    
-parser.add_argument('-t', '--type', help='collect only the type of data specified (heartrate, sleep, steps)', action='store', type=str, dest='collect_type')
-parser.add_argument('-v', '--version', help='prints the version', action='version', version=VERSION)
+def get_command_options(parser):
+  "Retrieves the command line options and returns a kv dict"
+  args = parser.parse_args()
+  fmt = "%(asctime)-15s %(message)s"
+  log_file = args.log_file
+  options = {'log_file' : args.log_file}
+  logging.basicConfig(filename=args.log_file, format=fmt, level=logging.INFO)
 
-# Configure how we want logging to work.  Note that if both the filename and level are specified, the filename will be ignored.
+  if args.debug:
+    if 'debug' in args.debug:
+      logging.basicConfig(level=logging.DEBUG)
+    if 'warn' in args.debug:
+      logging.basicConfig(level=logging.WARNING)
+    elif 'info' in args.debug:
+      logging.basicConfig(level=logging.INFO)
+    elif 'error' in args.debug:
+      logging.basicConfig(level=logging.ERROR)
+    else:
+      logging.basicConfig(level=logging.ERROR)
+      logging.error('Invalid debug level.  Exiting the program.')
+      exit(0)
+  
+  # Make sure all options are valid
+  if args.configfile:
+    if path.exists(args.configfile):
+      options['config_file'] = args.configfile
+    else:
+      logging.error("Configuration file does not exist.  Exiting.")
+      exit(0)
+
+  if not args.number_of_days:
+    options['number_of_days'] = 1
+  elif args.number_of_days < 0:
+    logging.error("Number of days needs to be greater than zero")
+    exit(0)
+  else:
+    options['number_of_days'] = args.number_of_days
+
+  if not os.path.isdir(args.output_dir):
+    logging.error('Directory does not exist')
+    exit(0)
+  else:
+    options['output_dir'] = args.output_dir
+
+  # Build the list of type of data to collect
+  if args.collect_type:
+    options['collect_type'] = args.collect_type
+    logging.info('Collecting information for: '+ args.collect_type)
+  
+  # Parse the end and start date arguments.  Make sure that they make sense
+
+  return(options)
+
+parser = set_command_options()
+options = get_command_options(parser)
+print(json.dumps(options))
+"""
 args = parser.parse_args()
-
 # Setup logging format and type
 fmt = "%(asctime)-15s %(message)s"
 log_file = args.log_file
@@ -139,17 +197,15 @@ if args.collect_type:
   logging.info('Collecting information for: '+ args.collect_type)
   
 # Parse the end and start date arguments.  Make sure that they make sense
-
+"""
 # define a few common dates
 today = datetime.today()
-yesterday = today - timedelta(days=number_of_days)
+yesterday = today - timedelta(days=options['number_of_days'])
 yesterday_str = datetime.strftime(yesterday,"%Y-%m-%d")
 
 def get_config():
-  "Read in the configuration file and return configuration"
-
-  return;
-
+  "Read in the configuration file and return configuration as a dict"
+  configuration = {}
 # Open and read in the configuration information.  Note that the file must contain the following fields:
 #    "base_url":"https://www.fitbit.com/"
 #    "api_url":"https://api.fitbit.com"
@@ -163,8 +219,9 @@ def get_config():
 #    "refresh_token": "<seenote below>"
 # Note:
 #   To make it easier, use the OAuth 2.0 tutorial page (https://dev.fitbit.com/apps/oauthinteractivetutorial) to get these
+  return(configuration);
 
-with open(config_file) as json_config_file:
+with open(options['config_file']) as json_config_file:
   data = json.load(json_config_file)
   
 # See the page https://dev.fitbit.com/build/reference/web-api/oauth2/
@@ -181,17 +238,17 @@ authd_client2 = fitbit.Fitbit(data['client_id'], data['client_secret'], oauth2=T
 # Save the data into a local files.  We want to save the data on a per-day basis so use the naming convention YY-MM-DD.csv
 request_limit = 150
 
-if 'heartrate' in collect_type or 'all' in collect_type:
-  heartrate_file = output_dir + '\\' + 'hr_intraday_' + yesterday_str + '.csv'
+if 'heartrate' in options['collect_type'] or 'all' in collect_type:
+  heartrate_file = options['output_dir'] + '\\' + 'hr_intraday_' + yesterday_str + '.csv'
   heartrate_df = get_heartrate(oauth_client=authd_client2, start_date=yesterday, time_interval='1sec', results_file=heartrate_file)
   print(heartrate_df.describe())
 
-if 'steps' in collect_type or 'all' in collect_type:
-  steps_file = output_dir + '\\' + 'steps_intraday_' + yesterday_str + '.csv'
+if 'steps' in options['collect_type'] or 'all' in collect_type:
+  steps_file = options['output_dir'] + '\\' + 'steps_intraday_' + yesterday_str + '.csv'
   steps_df = get_heartrate(oauth_client=authd_client2, start_date=yesterday, time_interval='15min', results_file=steps_file)
   print(steps_df.describe())
 
-if 'sleep' in collect_type or 'all' in collect_type:
-  sleep_file = output_dir + '\\' + 'sleep_day_' + yesterday_str + '.csv'
+if 'sleep' in options['collect_type'] or 'all' in collect_type:
+  sleep_file = options['output_dir'] + '\\' + 'sleep_day_' + yesterday_str + '.csv'
   sleep_df = get_sleep(oauth_client=authd_client2, start_date=yesterday, results_file=sleep_file)
   print(sleep_df.describe())
