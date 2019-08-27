@@ -19,6 +19,7 @@ import os.path
 import sys
 import requests
 import pandas as pandas
+import logging
 
 from os import path
 from datetime import datetime 
@@ -30,17 +31,21 @@ VERSION = 'fitbit-tracker ver 0.02'
 
 # Setup the valid arguments and then process.  Note we must have a configuration file.
 usage = 'Retrieves various information from the Fitbit website.'
-parser = argparse.ArgumentParser(prog='Fitbit Tracker', description=usage)
+parser = argparse.ArgumentParser(prog='Fitbit Tracker', description=usage, formatter_class=argparse.RawDescriptionHelpFormatter)
+
 
 # Add the arguments
-parser.add_argument('config', help='Name of the configuration file', type=str)
+parser.add_argument('configfile', help='Name of the configuration file. (default: %(default)s)', type=str, default='config.json')
 parser.add_argument('-a', '--all', help='collect all the data possible', action='store_true')
 parser.add_argument('--days', help='number of days to go back', 
                     action='store', type=int, dest='number_of_days', default='1')
-parser.add_argument('-d', '--debug', help='turn on debug messages', action='store_true', default=False)
+parser.add_argument('-d', '--debug', help='Set the debug level [debug info warn] (default: %(default)s)', action='store', 
+                     type=str, default='info')
 parser.add_argument('-e', '--end_date',  help='end date to collect data from', 
                     action='store', type=str,  dest='end_date')                    
-parser.add_argument('-o', '--output',  help='output directory to store results files', 
+parser.add_argument('-l', '--log_file', help='Set the logfile name. (default: %(default)s)', action='store', 
+                     type=str, default='fitbit-tracker.log')
+parser.add_argument('-o', '--output',  help='output directory to store results files. (default: %(default)s)', 
                     action='store', type=str,  dest='output_dir', default='results')                    
 parser.add_argument('-s', '--start_date',  help='start date to collect data from (mm-dd-yy)', 
                     action='store', type=str,  dest='start_date')                    
@@ -50,24 +55,45 @@ parser.add_argument('-v', '--version', help='prints the version', action='versio
 
 args = parser.parse_args()
 
+# Configure how we want logging to work.  Note that if both the filename and level are specified, the filename will be ignored.
+
+fmt = "%(asctime)-15s %(message)s"
+log_file = args.log_file
+if args.debug:
+  if 'debug' in args.debug:
+    logging.basicConfig(filename=log_file, format=fmt, level=logging.DEBUG)
+  if 'warn' in args.debug:
+    logging.basicConfig(filename=log_file, format=fmt, level=logging.WARNING)
+  elif 'info' in args.debug:
+    logging.basicConfig(filename=log_file, format=fmt, level=logging.INFO)
+  elif 'error' in args.debug:
+    logging.basicConfig(filename=log_file, format=fmt, level=logging.ERROR)
+  else:
+    logging.basicConfig(filename=log_file, format=fmt, level=logging.ERROR)
+    logging.error('Invalid debug level.  Exiting the program.')
+    exit(0)
+else:
+  logging.basicConfig(filename=log_file, format=fmt, level=logging.INFO)
+  print('We should not get here')
+  
 # Make sure all options are valid
 if args.config:
-  if path.exists(args.config):
-    config_file=args.config
+  if path.exists(args.configfile):
+    config_file=args.configfile
   else:
-    print("Configuration file does not exist.")
+    logging.error("Configuration file does not exist.  Exiting.")
     exit(0)
 
 if not args.number_of_days:
   number_of_days = 1
 elif args.number_of_days < 0:
-  print("Number of days needs to be greater than zero")
+  logging.error("Number of days needs to be greater than zero")
   exit(0)
 else:
   number_of_days = args.number_of_days
 
 if not os.path.isdir(args.output_dir):
-  print('Directory does not exist')
+  logging.error('Directory does not exist')
   exit(0)
 else:
   output_dir = args.output_dir
@@ -76,13 +102,15 @@ else:
 collect_type = [] 
 if args.collect_type:
   collect_type = args.collect_type
-  print('Collecting information for: '+ args.collect_type)
+  logging.info('Collecting information for: '+ args.collect_type)
   if 'heartrate' in args.collect_type:
-    print('Collecting data for intraday heatrate')
+    logging.info('Collecting data for intraday heatrate')
   if 'sleep' in args.collect_type:
     print('Collecting sleep information')
   if 'step' in args.collect_type:
     print('Collecting step information')
+
+# Parse the end and start date arguments.  Make sure that they make sense
 
 # define a few common dates
 today = datetime.today()
