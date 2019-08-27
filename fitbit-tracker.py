@@ -27,7 +27,51 @@ from datetime import timedelta
 
 # Globals
 AUTHOR = 'David Hunter'
-VERSION = 'fitbit-tracker ver 0.02'
+VERSION = 'fitbit-tracker ver beta-0.5'
+
+# Functions
+def get_heartrate (oauth_client, start_date, time_interval, results_file):
+  "Retrieve the intraday heartrate at the specified interval and store in data file and returns the dataframe."
+  hr = oauth_client.intraday_time_series('activities/heart', base_date=start_date, start_time='00:00', end_time='23:59', detail_level=time_interval)
+  logging.debug(json.dumps(hr, indent=2))
+  t_list = []
+  v_list = []
+  for i in hr['activities-heart-intraday']['dataset']:
+    v_list.append(i['value'])
+    t_list.append(i['time'])
+  df = pandas.DataFrame({'Time':t_list,'Heart Rate':v_list})
+  df.to_csv(results_file, columns=['Time','Heart Rate'], header=True, index=False)
+  return(df);
+
+def get_steps (oauth_client, start_date, time_interval, results_file):
+  "Retrieve the step count for the day at the specified interval and store in datafile."
+  hr = oauth_client.intraday_time_series('activities/steps', base_date=start_date, start_time='00:00', end_time='23:59', detail_level=time_interval)
+  logging.debug(json.dumps(hr, indent=2))
+  t_list = []
+  v_list = []
+  for i in hr['activities-steps-intraday']['dataset']:
+    v_list.append(i['value'])
+    t_list.append(i['time'])
+  df = pandas.DataFrame({'Time':t_list,'Steps':v_list})
+  df.to_csv(results_file, columns=['Time','Steps'], header=True, index=False)
+  return(df);
+
+def get_sleep (oauth_client, start_date, results_file):
+  "Retrieve the sleep data for the day, store in datafile and return the dataframe."
+  # Retrieve the sleep data.  We need to translate the "value" if sleep into the different categories so
+  # it can be aligned with the heartbeat data.  Maping for the values are: 1-asleep, 2-restless, 3-awake
+  sleep = authd_client2.get_sleep(start_date)
+  logging.debug(json.dumps(sleep, indent=2))
+  t_list = []
+  v_list = []
+  for i in sleep['sleep'][0]['minuteData']:
+    v_list.append(i['value'])
+    t_list.append(i['dateTime'])
+  df = pandas.DataFrame({'Time':t_list,'Sleep Type':v_list})
+  df.to_csv(results_file, columns=['Time','Sleep Type'], header=True, index=False)
+  return(df);
+
+### MAIN PROGRAM STARTS HERE ###
 
 # Setup the valid arguments and then process.  Note we must have a configuration file.
 usage = 'Retrieves various information from the Fitbit website.'
@@ -45,6 +89,8 @@ parser.add_argument('-v', '--version', help='prints the version', action='versio
 
 # Configure how we want logging to work.  Note that if both the filename and level are specified, the filename will be ignored.
 args = parser.parse_args()
+
+# Setup logging format and type
 fmt = "%(asctime)-15s %(message)s"
 log_file = args.log_file
 if args.debug:
@@ -91,19 +137,18 @@ collect_type = []
 if args.collect_type:
   collect_type = args.collect_type
   logging.info('Collecting information for: '+ args.collect_type)
-  if 'heartrate' in args.collect_type:
-    logging.info('Collecting data for intraday heatrate')
-  if 'sleep' in args.collect_type:
-    print('Collecting sleep information')
-  if 'step' in args.collect_type:
-    print('Collecting step information')
-
+  
 # Parse the end and start date arguments.  Make sure that they make sense
 
 # define a few common dates
 today = datetime.today()
 yesterday = today - timedelta(days=number_of_days)
 yesterday_str = datetime.strftime(yesterday,"%Y-%m-%d")
+
+def get_config():
+  "Read in the configuration file and return configuration"
+
+  return;
 
 # Open and read in the configuration information.  Note that the file must contain the following fields:
 #    "base_url":"https://www.fitbit.com/"
@@ -121,8 +166,7 @@ yesterday_str = datetime.strftime(yesterday,"%Y-%m-%d")
 
 with open(config_file) as json_config_file:
   data = json.load(json_config_file)
-  if args.debug: print(json.dumps(data, indent=2, sort_keys=True))
-
+  
 # See the page https://dev.fitbit.com/build/reference/web-api/oauth2/
 if data['access_token'] == '':
   print("No access token found.  Please generate and place in the configuration file.")
@@ -137,44 +181,17 @@ authd_client2 = fitbit.Fitbit(data['client_id'], data['client_secret'], oauth2=T
 # Save the data into a local files.  We want to save the data on a per-day basis so use the naming convention YY-MM-DD.csv
 request_limit = 150
 
-# Retrieve the interval heart rate data and store in a panda data frame.  We grab the highest
-# fidelity we can which is at best 1 second.  Note that it may not be exactly 1 second.  We will basically be 
-# one day behind today, so we start at midnight yesterday and go to 23:59 yesterday
 if 'heartrate' in collect_type or 'all' in collect_type:
-  hr_intraday = authd_client2.intraday_time_series('activities/heart', base_date=yesterday, start_time='00:00', end_time='23:59', detail_level='1sec')
-  time_list = []
-  value_list = []
-  for i in hr_intraday['activities-heart-intraday']['dataset']:
-    value_list.append(i['value'])
-    time_list.append(i['time'])
-  heartrate_df = pandas.DataFrame({'Time':time_list,'Heart Rate':value_list})
   heartrate_file = output_dir + '\\' + 'hr_intraday_' + yesterday_str + '.csv'
-  heartrate_df.to_csv(heartrate_file, columns=['Time','Heart Rate'], header=True, index=False)
+  heartrate_df = get_heartrate(oauth_client=authd_client2, start_date=yesterday, time_interval='1sec', results_file=heartrate_file)
   print(heartrate_df.describe())
 
-# retrieve steps series and store in a panda data frame.  We will use a fidelity of 15 minutes.
-if 'steps' in collect_type:
-  steps_intraday = authd_client2.intraday_time_series('activities/steps', base_date=yesterday, start_time='00:00', end_time='23:59', detail_level='15min')
-  time_list = []
-  value_list = []
-  for i in steps_intraday['activities-steps-intraday']['dataset']:
-    value_list.append(i['value'])
-    time_list.append(i['time'])
-  steps_df = pandas.DataFrame({'Time':time_list,'Steps':value_list})
+if 'steps' in collect_type or 'all' in collect_type:
   steps_file = output_dir + '\\' + 'steps_intraday_' + yesterday_str + '.csv'
-  steps_df.to_csv(steps_file, columns=['Time','Steps'], header=True, index=False)
+  steps_df = get_heartrate(oauth_client=authd_client2, start_date=yesterday, time_interval='15min', results_file=steps_file)
   print(steps_df.describe())
 
-# Retrieve the sleep data.  We need to translate the "value" if sleep into the different categories so
-# it can be aligned with the heartbeat data.  Maping for the values are: 1-asleep, 2-restless, 3-awake
-if 'sleep' in collect_type:
-  single_day_sleep = authd_client2.get_sleep(yesterday)
-  time_list = []
-  value_list = []
-  for i in single_day_sleep['sleep'][0]['minuteData']:
-    value_list.append(i['value'])
-    time_list.append(i['dateTime'])
-  sleep_df = pandas.DataFrame({'Time':time_list,'Sleep Type':value_list})
+if 'sleep' in collect_type or 'all' in collect_type:
   sleep_file = output_dir + '\\' + 'sleep_day_' + yesterday_str + '.csv'
-  sleep_df.to_csv(sleep_file, columns=['Time','Sleep Type'], header=True, index=False)
+  sleep_df = get_sleep(oauth_client=authd_client2, start_date=yesterday, results_file=sleep_file)
   print(sleep_df.describe())
