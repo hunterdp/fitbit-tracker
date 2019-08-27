@@ -71,7 +71,6 @@ def get_sleep (oauth_client, start_date, results_file):
   df.to_csv(results_file, columns=['Time','Sleep Type'], header=True, index=False)
   return(df);
 
-### MAIN PROGRAM STARTS HERE ###
 def set_command_options():
   "Sets the command line arguments."
   # Setup the valid arguments and then process.  Note we must have a configuration file.
@@ -143,83 +142,34 @@ def get_command_options(parser):
 
   return(options)
 
+def get_config():
+  "Read in the configuration file and return configuration as a dict"
+  configuration = {}
+  # Open and read in the configuration information.  Note that the file must contain the following fields:  
+  #    "base_url":"https://www.fitbit.com/"
+  #    "api_url":"https://api.fitbit.com"
+  #    "auth2_url":"https://fitbit.com/oauth2/authorize"
+  #    "client_id":"<clien_id from fitbit website>"
+  #    "client_secret":"<client secret from fitbit web site"
+  #    "redirect_url":"<uri redirect from fitbit website>"
+  #    "auth_scopes":"activity, profile, weight, heatrate, settings, sleep"
+  #    "token_expires":"<see note below>"
+  #    "access_token": "<see the note below>"
+  #    "refresh_token": "<seenote below>"
+  # Note:
+  #   To make it easier, use the OAuth 2.0 tutorial page (https://dev.fitbit.com/apps/oauthinteractivetutorial) to get these
+  return(configuration);
+
+
+### MAIN PROGRAM STARTS HERE ###
+
 parser = set_command_options()
 options = get_command_options(parser)
 print(json.dumps(options))
-"""
-args = parser.parse_args()
-# Setup logging format and type
-fmt = "%(asctime)-15s %(message)s"
-log_file = args.log_file
-if args.debug:
-  if 'debug' in args.debug:
-    logging.basicConfig(filename=log_file, format=fmt, level=logging.DEBUG)
-  if 'warn' in args.debug:
-    logging.basicConfig(filename=log_file, format=fmt, level=logging.WARNING)
-  elif 'info' in args.debug:
-    logging.basicConfig(filename=log_file, format=fmt, level=logging.INFO)
-  elif 'error' in args.debug:
-    logging.basicConfig(filename=log_file, format=fmt, level=logging.ERROR)
-  else:
-    logging.basicConfig(filename=log_file, format=fmt, level=logging.ERROR)
-    logging.error('Invalid debug level.  Exiting the program.')
-    exit(0)
-else:
-  logging.basicConfig(filename=log_file, format=fmt, level=logging.INFO)
-  print('We should not get here')
-  
-# Make sure all options are valid
-if args.configfile:
-  if path.exists(args.configfile):
-    config_file=args.configfile
-  else:
-    logging.error("Configuration file does not exist.  Exiting.")
-    exit(0)
-
-if not args.number_of_days:
-  number_of_days = 1
-elif args.number_of_days < 0:
-  logging.error("Number of days needs to be greater than zero")
-  exit(0)
-else:
-  number_of_days = args.number_of_days
-
-if not os.path.isdir(args.output_dir):
-  logging.error('Directory does not exist')
-  exit(0)
-else:
-  output_dir = args.output_dir
-
-# Build the list of type of data to collect
-collect_type = [] 
-if args.collect_type:
-  collect_type = args.collect_type
-  logging.info('Collecting information for: '+ args.collect_type)
-  
-# Parse the end and start date arguments.  Make sure that they make sense
-"""
 # define a few common dates
 today = datetime.today()
 yesterday = today - timedelta(days=options['number_of_days'])
 yesterday_str = datetime.strftime(yesterday,"%Y-%m-%d")
-
-def get_config():
-  "Read in the configuration file and return configuration as a dict"
-  configuration = {}
-# Open and read in the configuration information.  Note that the file must contain the following fields:
-#    "base_url":"https://www.fitbit.com/"
-#    "api_url":"https://api.fitbit.com"
-#    "auth2_url":"https://fitbit.com/oauth2/authorize"
-#    "client_id":"<clien_id from fitbit website>"
-#    "client_secret":"<client secret from fitbit web site"
-#    "redirect_url":"<uri redirect from fitbit website>"
-#    "auth_scopes":"activity, profile, weight, heatrate, settings, sleep"
-#    "token_expires":"<see note below>"
-#    "access_token": "<see the note below>"
-#    "refresh_token": "<seenote below>"
-# Note:
-#   To make it easier, use the OAuth 2.0 tutorial page (https://dev.fitbit.com/apps/oauthinteractivetutorial) to get these
-  return(configuration);
 
 with open(options['config_file']) as json_config_file:
   data = json.load(json_config_file)
@@ -229,13 +179,10 @@ if data['access_token'] == '':
   print("No access token found.  Please generate and place in the configuration file.")
   logging.error('No access token found.  Exiting.')
   exit(0)
-
-# Create an oauth and oauth2 client (we mostly use the oauth2 client)
 authd_client = fitbit.Fitbit(data['client_id'], data['client_secret'], access_token=data['access_token'])
 authd_client2 = fitbit.Fitbit(data['client_id'], data['client_secret'], oauth2=True, access_token=data['access_token'], refresh_token=data['refresh_token'])
 
 # Collect the requested information.  Note that we are limited to 150 requests per day.  If we will exceed that, message back to the caller and exit.
-# Save the data into a local files.  We want to save the data on a per-day basis so use the naming convention YY-MM-DD.csv
 request_limit = 150
 
 if 'heartrate' in options['collect_type'] or 'all' in collect_type:
