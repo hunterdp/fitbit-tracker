@@ -33,7 +33,6 @@ VERSION = 'fitbit-tracker ver 0.02'
 usage = 'Retrieves various information from the Fitbit website.'
 parser = argparse.ArgumentParser(prog='Fitbit Tracker', description=usage, formatter_class=argparse.RawDescriptionHelpFormatter)
 
-
 # Add the arguments
 parser.add_argument('configfile', help='Name of the configuration file. (default: %(default)s)', type=str, default='config.json')
 parser.add_argument('-a', '--all', help='collect all the data possible', action='store_true')
@@ -53,10 +52,8 @@ parser.add_argument('-t', '--type', help='collect only the type of data specifie
                     action='store', type=str, dest='collect_type')
 parser.add_argument('-v', '--version', help='prints the version', action='version', version=VERSION)
 
-args = parser.parse_args()
-
 # Configure how we want logging to work.  Note that if both the filename and level are specified, the filename will be ignored.
-
+args = parser.parse_args()
 fmt = "%(asctime)-15s %(message)s"
 log_file = args.log_file
 if args.debug:
@@ -77,7 +74,7 @@ else:
   print('We should not get here')
   
 # Make sure all options are valid
-if args.config:
+if args.configfile:
   if path.exists(args.configfile):
     config_file=args.configfile
   else:
