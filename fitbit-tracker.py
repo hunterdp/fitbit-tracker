@@ -32,24 +32,15 @@ VERSION = 'fitbit-tracker ver 0.02'
 # Setup the valid arguments and then process.  Note we must have a configuration file.
 usage = 'Retrieves various information from the Fitbit website.'
 parser = argparse.ArgumentParser(prog='Fitbit Tracker', description=usage, formatter_class=argparse.RawDescriptionHelpFormatter)
-
-# Add the arguments
 parser.add_argument('configfile', help='Name of the configuration file. (default: %(default)s)', type=str, default='config.json')
 parser.add_argument('-a', '--all', help='collect all the data possible', action='store_true')
-parser.add_argument('--days', help='number of days to go back', 
-                    action='store', type=int, dest='number_of_days', default='1')
-parser.add_argument('-d', '--debug', help='Set the debug level [debug info warn] (default: %(default)s)', action='store', 
-                     type=str, default='info')
-parser.add_argument('-e', '--end_date',  help='end date to collect data from', 
-                    action='store', type=str,  dest='end_date')                    
-parser.add_argument('-l', '--log_file', help='Set the logfile name. (default: %(default)s)', action='store', 
-                     type=str, default='fitbit-tracker.log')
-parser.add_argument('-o', '--output',  help='output directory to store results files. (default: %(default)s)', 
-                    action='store', type=str,  dest='output_dir', default='results')                    
-parser.add_argument('-s', '--start_date',  help='start date to collect data from (mm-dd-yy)', 
-                    action='store', type=str,  dest='start_date')                    
-parser.add_argument('-t', '--type', help='collect only the type of data specified (heartrate, sleep, steps)',
-                    action='store', type=str, dest='collect_type')
+parser.add_argument('--days', help='number of days to go back', action='store', type=int, dest='number_of_days', default='1')
+parser.add_argument('-d', '--debug', help='Set the debug level [debug info warn] (default: %(default)s)', action='store', type=str, default='info')
+parser.add_argument('-e', '--end_date',  help='end date to collect data from', action='store', type=str,  dest='end_date')                    
+parser.add_argument('-l', '--log_file', help='Set the logfile name. (default: %(default)s)', action='store', type=str, default='fitbit-tracker.log')
+parser.add_argument('-o', '--output',  help='output directory to store results files. (default: %(default)s)', action='store', type=str,  dest='output_dir', default='results')                    
+parser.add_argument('-s', '--start_date',  help='start date to collect data from (mm-dd-yy)', action='store', type=str,  dest='start_date')                    
+parser.add_argument('-t', '--type', help='collect only the type of data specified (heartrate, sleep, steps)', action='store', type=str, dest='collect_type')
 parser.add_argument('-v', '--version', help='prints the version', action='version', version=VERSION)
 
 # Configure how we want logging to work.  Note that if both the filename and level are specified, the filename will be ignored.
@@ -135,6 +126,7 @@ with open(config_file) as json_config_file:
 # See the page https://dev.fitbit.com/build/reference/web-api/oauth2/
 if data['access_token'] == '':
   print("No access token found.  Please generate and place in the configuration file.")
+  logging.error('No access token found.  Exiting.')
   exit(0)
 
 # Create an oauth and oauth2 client (we mostly use the oauth2 client)
@@ -186,5 +178,3 @@ if 'sleep' in collect_type:
   sleep_file = output_dir + '\\' + 'sleep_day_' + yesterday_str + '.csv'
   sleep_df.to_csv(sleep_file, columns=['Time','Sleep Type'], header=True, index=False)
   print(sleep_df.describe())
-
-
