@@ -166,7 +166,7 @@ def get_config():
 parser = set_command_options()
 options = get_command_options(parser)
 print(json.dumps(options))
-# define a few common dates
+
 today = datetime.today()
 yesterday = today - timedelta(days=options['number_of_days'])
 yesterday_str = datetime.strftime(yesterday,"%Y-%m-%d")
@@ -174,16 +174,24 @@ yesterday_str = datetime.strftime(yesterday,"%Y-%m-%d")
 with open(options['config_file']) as json_config_file:
   data = json.load(json_config_file)
   
+# Connect to the fitbit server using oauth2
 # See the page https://dev.fitbit.com/build/reference/web-api/oauth2/
 if data['access_token'] == '':
   print("No access token found.  Please generate and place in the configuration file.")
   logging.error('No access token found.  Exiting.')
   exit(0)
+# TODO(dph): Modify this to account for when the token expires
 authd_client = fitbit.Fitbit(data['client_id'], data['client_secret'], access_token=data['access_token'])
 authd_client2 = fitbit.Fitbit(data['client_id'], data['client_secret'], oauth2=True, access_token=data['access_token'], refresh_token=data['refresh_token'])
 
-# Collect the requested information.  Note that we are limited to 150 requests per day.  If we will exceed that, message back to the caller and exit.
+# Collect the requested information.  Note that we are limited to 150 requests per hour.  If we will exceed that, message back to the caller and exit.
 request_limit = 150
+num_types = 0
+if 'heartrate' in options['collect_type']: num_types = num_types + 1
+if 'sleep' in options['collect_type']: num_types = num_types + 1
+if 'steps' in options['collect_type']: num_types = num_types + 1
+max_days = int(request_limit/num_types)
+print(int(max_days))
 
 if 'heartrate' in options['collect_type'] or 'all' in collect_type:
   heartrate_file = options['output_dir'] + '\\' + 'hr_intraday_' + yesterday_str + '.csv'
