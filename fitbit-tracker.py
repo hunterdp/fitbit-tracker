@@ -80,10 +80,10 @@ def set_command_options():
   parser.add_argument('-a', '--all', help='collect all the data possible', action='store_true')
   parser.add_argument('--days', help='number of days to go back', action='store', type=int, dest='number_of_days', default='1')
   parser.add_argument('-d', '--debug', help='Set the debug level [debug info warn] (default: %(default)s)', action='store', type=str, default='info')
-  parser.add_argument('-e', '--end_date',  help='end date to collect data from', action='store', type=str,  dest='end_date')                    
+  parser.add_argument('-e', '--end_date',  help='end date to collect data from (yyyy-mm-dd)', action='store', type=str,  dest='end_date')                    
   parser.add_argument('-l', '--log_file', help='Set the logfile name. (default: %(default)s)', action='store', type=str, default='fitbit-tracker.log')
   parser.add_argument('-o', '--output',  help='output directory to store results files. (default: %(default)s)', action='store', type=str,  dest='output_dir', default='results')                    
-  parser.add_argument('-s', '--start_date',  help='start date to collect data from (mm-dd-yy)', action='store', type=str,  dest='start_date')                    
+  parser.add_argument('-s', '--start_date',  help='start date to collect data from (yyyy-mm-dd)', action='store', type=str,  dest='start_date')                    
   parser.add_argument('-t', '--type', help='collect only the type of data specified (heartrate, sleep, steps)', action='store', type=str, dest='collect_type')
   parser.add_argument('-v', '--version', help='prints the version', action='version', version=VERSION)
   args = parser.parse_args()
@@ -139,7 +139,13 @@ def get_command_options(parser):
     logging.info('Collecting information for: '+ args.collect_type)
   
   # Parse the end and start date arguments.  Make sure that they make sense
+  if args.start_date:
+    options['start_date'] = args.start_date
+    logging.info('Start date: ' + args.start_date)
 
+  if args.end_date:
+    options['end_date'] = args.end_date
+    logging.info('End date: ' + args.end_date)
   return(options)
 
 def get_config():
@@ -165,12 +171,11 @@ def get_config():
 
 parser = set_command_options()
 options = get_command_options(parser)
-print(json.dumps(options))
+logging.info(json.dumps(options))
 
 today = datetime.today()
 yesterday = today - timedelta(days=options['number_of_days'])
 yesterday_str = datetime.strftime(yesterday,"%Y-%m-%d")
-
 with open(options['config_file']) as json_config_file:
   data = json.load(json_config_file)
   
@@ -191,7 +196,33 @@ if 'heartrate' in options['collect_type']: num_types = num_types + 1
 if 'sleep' in options['collect_type']: num_types = num_types + 1
 if 'steps' in options['collect_type']: num_types = num_types + 1
 max_days = int(request_limit/num_types)
-print(int(max_days))
+logging.info('Max days: ' + str(max_days))
+
+# Validate that the number of days to retrieve will not go over the limit.  Note that this assumes there have been no other api requests 
+# during the hour.  If the --days flag was also issued, then error and exit.
+if 'number_of_days' in options:
+  if 'start_date' in options: 
+    logging.error('Cannot have both start/end dates and days configured.')
+    exit(0)
+  elif 'end_date' in options: 
+    logging.error("Cannot use start/end date with days options.")
+    exit(0)
+
+if 'end_date' in options:
+  if 'start_date' in options:
+    logging.info('Start date: '+ options['start_date'])
+    logging.info('End date: '+ options['end_date'])
+    start = datetime.strptime(start_date, '%Y-%m-%d')
+    end = datetime.strptime(end_date, '%Y-%m-%d')
+    req_days = end - start
+    logging.info('Number of days requested: ' + str(req_days))
+    if req_days > max_days:
+      logging.error('Requested days exceed number calls per hour.  Exiting')
+      exit(0)
+else:
+  logging.error('You need to have both a start and end date.  Exiting')
+  exit(0)
+
 
 if 'heartrate' in options['collect_type'] or 'all' in collect_type:
   heartrate_file = options['output_dir'] + '\\' + 'hr_intraday_' + yesterday_str + '.csv'
