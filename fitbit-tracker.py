@@ -13,21 +13,27 @@ day.  This will generate a directory of data files suitable for post processing.
 """
 # Imports
 import fitbit
+import inspect
 import argparse
 import json
+import os
 import os.path
 import sys
 import requests
 import pandas as pandas
 import logging
+import logging.handlers
 
 from os import path
 from datetime import datetime 
+from datetime import date
 from datetime import timedelta
 
 # Globals
-AUTHOR = 'David Hunter'
-VERSION = 'fitbit-tracker ver beta-0.5'
+__AUTHOR__ = 'David Hunter'
+__VERSION__ = 'fitbit-tracker ver beta-0.5'
+__LOG_NAME__ = 'fitbit-tracker.log'
+__TITLE__ = 'fitebit-tracker.py'
 
 # Functions
 def get_heartrate (oauth_client, start_date, time_interval, results_file):
@@ -76,76 +82,101 @@ def set_command_options():
   # Setup the valid arguments and then process.  Note we must have a configuration file.
   usage = 'Retrieves various information from the Fitbit website.'
   parser = argparse.ArgumentParser(prog='Fitbit Tracker', description=usage, formatter_class=argparse.RawDescriptionHelpFormatter)
+  group = parser.add_mutually_exclusive_group(required=True)
+  
   parser.add_argument('configfile', help='Name of the configuration file. (default: %(default)s)', type=str, default='config.json')
-  parser.add_argument('-a', '--all', help='collect all the data possible', action='store_true')
-  parser.add_argument('--days', help='number of days to go back', action='store', type=int, dest='number_of_days', default='1')
-  parser.add_argument('-d', '--debug', help='Set the debug level [debug info warn] (default: %(default)s)', action='store', type=str, default='info')
-  parser.add_argument('-e', '--end_date',  help='end date to collect data from (yyyy-mm-dd)', action='store', type=str,  dest='end_date')                    
+  parser.add_argument('-d', '--debug_level', help='Set the debug level [debug info warn] (default: %(default)s)', action='store', type=str, default='info')
   parser.add_argument('-l', '--log_file', help='Set the logfile name. (default: %(default)s)', action='store', type=str, default='fitbit-tracker.log')
   parser.add_argument('-o', '--output',  help='output directory to store results files. (default: %(default)s)', action='store', type=str,  dest='output_dir', default='results')                    
+  parser.add_argument('-v', '--version', help='prints the version', action='version', version=__VERSION__)
+  parser.add_argument('--days', help='number of days to go back', action='store', type=int, dest='number_of_days')
+  parser.add_argument('-e', '--end_date',  help='end date to collect data from (yyyy-mm-dd)', action='store', type=str,  dest='end_date')                    
   parser.add_argument('-s', '--start_date',  help='start date to collect data from (yyyy-mm-dd)', action='store', type=str,  dest='start_date')                    
-  parser.add_argument('-t', '--type', help='collect only the type of data specified (heartrate, sleep, steps)', action='store', type=str, dest='collect_type')
-  parser.add_argument('-v', '--version', help='prints the version', action='version', version=VERSION)
+
+  group.add_argument('-a', '--all', help='collect all the data possible', action='store_true')
+  group.add_argument('-t', '--type', help='collect only the type of data specified (heartrate, sleep, steps)', action='store', type=str, dest='collect_type')
+
+
   args = parser.parse_args()
   return(parser);
 
 def get_command_options(parser):
   "Retrieves the command line options and returns a kv dict"
   args = parser.parse_args()
-  fmt = "%(asctime)-15s %(message)s"
+  fmt = "%(asctime)-15s %(levelname)-8s %(message)s"
   log_file = args.log_file
   options = {'log_file' : args.log_file}
   logging.basicConfig(filename=args.log_file, format=fmt, level=logging.INFO)
-
-  if args.debug:
-    if 'debug' in args.debug:
+  
+  # Retrieve the data type(s) to collect.
+  if args.all:
+    options['collect_type'] = 'steps heartrate sleep'
+  elif args.collect_type:
+    options['collect_type'] = args.collect_type
+    func = inspect.currentframe()
+    logging.info('Collecting information for: '+ args.collect_type)
+  else:
+    logging.warning('You need to specify the type of data to collect or use the -a flag')
+    sys.exit(1)
+  
+  # Set the desired logging level
+  if args.debug_level:
+    if 'debug' in args.debug_level:
       logging.basicConfig(level=logging.DEBUG)
-    if 'warn' in args.debug:
+    if 'warn' in args.debug_level:
       logging.basicConfig(level=logging.WARNING)
-    elif 'info' in args.debug:
+    elif 'info' in args.debug_level:
       logging.basicConfig(level=logging.INFO)
-    elif 'error' in args.debug:
+    elif 'error' in args.debug_level:
       logging.basicConfig(level=logging.ERROR)
     else:
       logging.basicConfig(level=logging.ERROR)
       logging.error('Invalid debug level.  Exiting the program.')
-      exit(0)
+      sys.exit(1)
   
-  # Make sure all options are valid
+  # Use the specified configuration file.  There is no default.
   if args.configfile:
     if path.exists(args.configfile):
       options['config_file'] = args.configfile
     else:
       logging.error("Configuration file does not exist.  Exiting.")
-      exit(0)
+      sys.exit(1)
+  
+  # Retrieve the the day(s) to collect data for
+  if args.number_of_days and (args.start_date or args.end_date ):
+    logging.error('You can not specify both a start/end date and number of days.  Exiting')
+    sys.exit(1)
 
-  if not args.number_of_days:
-    options['number_of_days'] = 1
-  elif args.number_of_days < 0:
-    logging.error("Number of days needs to be greater than zero")
-    exit(0)
+  elif args.number_of_days:
+    # Use number of days before today
+    if args.number_of_days <= 0:
+      logging.error("Number of days needs to be greater than zero.  Exiting")
+      sys.exit(1)
+    else:
+      options['number_of_days'] = args.number_of_days
+      logging.info("Number of days previous: " + str(options['number_of_days']))
+  
+  elif args.start_date and args.end_date:
+    # Use start and end dates
+    options['start_date'] = args.start_date
+    options['end_date'] = args.end_date
+    logging.info('Start date: ' + args.start_date)
+    logging.info('End date: ' + args.end_date)
+    if args.start_date > args.end_date:
+      logging.error("Start date is after end date.  Exiting.")
+      sys.exit(1)
   else:
-    options['number_of_days'] = args.number_of_days
+    # Start and end date not specified.
+    logging.error('Both start and end dates need to be specified.  Exiting.')
+    sys.exit(1)
 
   if not os.path.isdir(args.output_dir):
     logging.error('Directory does not exist')
-    exit(0)
+    sys.exit(1)
   else:
     options['output_dir'] = args.output_dir
 
-  # Build the list of type of data to collect
-  if args.collect_type:
-    options['collect_type'] = args.collect_type
-    logging.info('Collecting information for: '+ args.collect_type)
-  
-  # Parse the end and start date arguments.  Make sure that they make sense
-  if args.start_date:
-    options['start_date'] = args.start_date
-    logging.info('Start date: ' + args.start_date)
-
-  if args.end_date:
-    options['end_date'] = args.end_date
-    logging.info('End date: ' + args.end_date)
+  logging.info(json.dumps(options))
   return(options)
 
 def get_config():
@@ -166,75 +197,79 @@ def get_config():
   #   To make it easier, use the OAuth 2.0 tutorial page (https://dev.fitbit.com/apps/oauthinteractivetutorial) to get these
   return(configuration);
 
-
 ### MAIN PROGRAM STARTS HERE ###
 
 parser = set_command_options()
 options = get_command_options(parser)
-logging.info(json.dumps(options))
 
-today = datetime.today()
-yesterday = today - timedelta(days=options['number_of_days'])
-yesterday_str = datetime.strftime(yesterday,"%Y-%m-%d")
 with open(options['config_file']) as json_config_file:
   data = json.load(json_config_file)
   
-# Connect to the fitbit server using oauth2
-# See the page https://dev.fitbit.com/build/reference/web-api/oauth2/
+# Connect to the fitbit server using oauth2 See the page https://dev.fitbit.com/build/reference/web-api/oauth2/
 if data['access_token'] == '':
   print("No access token found.  Please generate and place in the configuration file.")
   logging.error('No access token found.  Exiting.')
-  exit(0)
+  sys.exit(1)
 # TODO(dph): Modify this to account for when the token expires
 authd_client = fitbit.Fitbit(data['client_id'], data['client_secret'], access_token=data['access_token'])
 authd_client2 = fitbit.Fitbit(data['client_id'], data['client_secret'], oauth2=True, access_token=data['access_token'], refresh_token=data['refresh_token'])
 
-# Collect the requested information.  Note that we are limited to 150 requests per hour.  If we will exceed that, message back to the caller and exit.
+# Note that that there is a limit of 150 api requests per hour. If the
+# requested number of days will exceed that, message back to the caller and exit.
 request_limit = 150
 num_types = 0
-if 'heartrate' in options['collect_type']: num_types = num_types + 1
-if 'sleep' in options['collect_type']: num_types = num_types + 1
-if 'steps' in options['collect_type']: num_types = num_types + 1
+if 'heartrate' in options['collect_type']: num_types += 1
+if 'sleep' in options['collect_type']: num_types += 1
+if 'steps' in options['collect_type']: num_types += 1
 max_days = int(request_limit/num_types)
 logging.info('Max days: ' + str(max_days))
 
-# Validate that the number of days to retrieve will not go over the limit.  Note that this assumes there have been no other api requests 
-# during the hour.  If the --days flag was also issued, then error and exit.
-if 'number_of_days' in options:
-  if 'start_date' in options: 
-    logging.error('Cannot have both start/end dates and days configured.')
-    exit(0)
-  elif 'end_date' in options: 
-    logging.error("Cannot use start/end date with days options.")
-    exit(0)
+# Get the number of days to requested and ensure it does not exceed the api limit/hr
+# Note that this assumes there have been no other api requests during the hour.  
+number_of_days_requested = 1
+if 'end_date' in options and 'start_date' in options:
+  start = datetime.strptime(options['start_date'], '%Y-%m-%d')
+  end = datetime.strptime(options['end_date'], '%Y-%m-%d')
+  number_of_days_requested = end - start
+  number_of_days_requested_int = getattr(number_of_days_requested, 'days')
 
-if 'end_date' in options:
-  if 'start_date' in options:
-    logging.info('Start date: '+ options['start_date'])
-    logging.info('End date: '+ options['end_date'])
-    start = datetime.strptime(start_date, '%Y-%m-%d')
-    end = datetime.strptime(end_date, '%Y-%m-%d')
-    req_days = end - start
-    logging.info('Number of days requested: ' + str(req_days))
-    if req_days > max_days:
-      logging.error('Requested days exceed number calls per hour.  Exiting')
-      exit(0)
+  logging.info('options[start_date]: '+ options['start_date'])
+  logging.info('options[end_date]: '+ options['end_date'])
+  logging.info('Startdate:' + str(start))
+  logging.info('Enddate:' + str(end))
+  logging.info('Number of days requested: ' + str(number_of_days_requested))
+  logging.info('Number of days requested: ' + str(number_of_days_requested_int))
+
+  if str(number_of_days_requested) > str(max_days):
+    logging.error('Requested days exceed number calls per hour.  Exiting')
+    sys.exit(1)
+
+elif 'number_of_days' in options:
+  # Start/End date not specified, use the --days option
+  today = datetime.today()
+  date_to_collect = today - timedelta(days=options['number_of_days'])
+  date_to_collect_str = datetime.strftime(date_to_collect,"%Y-%m-%d")
+  logging.info('Number of days prior to retrieve: ' + str(date_to_collect))
+
 else:
-  logging.error('You need to have both a start and end date.  Exiting')
-  exit(0)
+  logging.error('No date specified.  Exiting')
+  sys.exit(1)
+date_to_collect_str = datetime.strftime(date_to_collect, "%Y-%m-%d")
+logging.info('Date to collect: ' + date_to_collect_str)
 
-
-if 'heartrate' in options['collect_type'] or 'all' in collect_type:
-  heartrate_file = options['output_dir'] + '\\' + 'hr_intraday_' + yesterday_str + '.csv'
-  heartrate_df = get_heartrate(oauth_client=authd_client2, start_date=yesterday, time_interval='1sec', results_file=heartrate_file)
+# If we have a set of dates, start at the end and work backwards to the start date.  If
+# we just have a single date, start there and use the date specified.
+if 'heartrate' in options['collect_type'] or 'all' in options['collect_type']:
+  heartrate_file = options['output_dir'] + '\\' + 'hr_intraday_' + date_to_collect_str + '.csv'
+  heartrate_df = get_heartrate(oauth_client=authd_client2, start_date=date_to_collect_str, time_interval='1sec', results_file=heartrate_file)
   print(heartrate_df.describe())
 
-if 'steps' in options['collect_type'] or 'all' in collect_type:
-  steps_file = options['output_dir'] + '\\' + 'steps_intraday_' + yesterday_str + '.csv'
-  steps_df = get_heartrate(oauth_client=authd_client2, start_date=yesterday, time_interval='15min', results_file=steps_file)
+if 'steps' in options['collect_type'] or 'all' in options['collect_type']:
+  steps_file = options['output_dir'] + '\\' + 'steps_intraday_' + date_to_collect_str + '.csv'
+  steps_df = get_steps(oauth_client=authd_client2, start_date=date_to_collect_str, time_interval='15min', results_file=steps_file)
   print(steps_df.describe())
 
-if 'sleep' in options['collect_type'] or 'all' in collect_type:
-  sleep_file = options['output_dir'] + '\\' + 'sleep_day_' + yesterday_str + '.csv'
-  sleep_df = get_sleep(oauth_client=authd_client2, start_date=yesterday, results_file=sleep_file)
+if 'sleep' in options['collect_type'] or 'all' in options['collect_type']:
+  sleep_file = options['output_dir'] + '\\' + 'sleep_day_' + date_to_collect_str + '.csv'
+  sleep_df = get_sleep(oauth_client=authd_client2, start_date=date_to_collect, results_file=sleep_file)
   print(sleep_df.describe())
