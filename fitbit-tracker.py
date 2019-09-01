@@ -9,8 +9,9 @@ and store it accordinly.
 
 To collect data over long periods of time, put this into a script and call it once a
 day.  This will generate a directory of data files suitable for post processing.
-
 """
+# TODO(dph) Need to add in try/except error handeling when a day contains no data.
+
 # Imports
 import fitbit
 import inspect
@@ -179,24 +180,6 @@ def get_command_options(parser):
   logging.info(json.dumps(options))
   return(options)
 
-def get_config():
-  "Read in the configuration file and return configuration as a dict"
-  configuration = {}
-  # Open and read in the configuration information.  Note that the file must contain the following fields:  
-  #    "base_url":"https://www.fitbit.com/"
-  #    "api_url":"https://api.fitbit.com"
-  #    "auth2_url":"https://fitbit.com/oauth2/authorize"
-  #    "client_id":"<clien_id from fitbit website>"
-  #    "client_secret":"<client secret from fitbit web site"
-  #    "redirect_url":"<uri redirect from fitbit website>"
-  #    "auth_scopes":"activity, profile, weight, heatrate, settings, sleep"
-  #    "token_expires":"<see note below>"
-  #    "access_token": "<see the note below>"
-  #    "refresh_token": "<seenote below>"
-  # Note:
-  #   To make it easier, use the OAuth 2.0 tutorial page (https://dev.fitbit.com/apps/oauthinteractivetutorial) to get these
-  return(configuration);
-
 ### MAIN PROGRAM STARTS HERE ###
 
 parser = set_command_options()
@@ -223,53 +206,56 @@ if 'sleep' in options['collect_type']: num_types += 1
 if 'steps' in options['collect_type']: num_types += 1
 max_days = int(request_limit/num_types)
 logging.info('Max days: ' + str(max_days))
+number_of_days_requested_int = 1
 
-# Get the number of days to requested and ensure it does not exceed the api limit/hr
-# Note that this assumes there have been no other api requests during the hour.  
-number_of_days_requested = 1
 if 'end_date' in options and 'start_date' in options:
-  start = datetime.strptime(options['start_date'], '%Y-%m-%d')
-  end = datetime.strptime(options['end_date'], '%Y-%m-%d')
-  number_of_days_requested = end - start
+  # Get the start date and number of days to requested.  Ensure it does not exceed the api limit/hr
+  # Note that this assumes there have been no other api requests during the hour. 
+  start_date = datetime.strptime(options['start_date'], '%Y-%m-%d')
+  end_date = datetime.strptime(options['end_date'], '%Y-%m-%d')
+  number_of_days_requested = end_date - start_date
   number_of_days_requested_int = getattr(number_of_days_requested, 'days')
 
-  logging.info('options[start_date]: '+ options['start_date'])
-  logging.info('options[end_date]: '+ options['end_date'])
-  logging.info('Startdate:' + str(start))
-  logging.info('Enddate:' + str(end))
-  logging.info('Number of days requested: ' + str(number_of_days_requested))
-  logging.info('Number of days requested: ' + str(number_of_days_requested_int))
+  logging.info('Startdate:' + str(start_date))
+  logging.info('Enddate:' + str(end_date))
+  logging.info('Days requested vale: ' + str(number_of_days_requested))
+  logging.info('Number of interger days requested: ' + str(number_of_days_requested_int))
 
-  if str(number_of_days_requested) > str(max_days):
+  if number_of_days_requested_int > max_days:
     logging.error('Requested days exceed number calls per hour.  Exiting')
     sys.exit(1)
 
 elif 'number_of_days' in options:
-  # Start/End date not specified, use the --days option
+  # Use the --days option
   today = datetime.today()
-  date_to_collect = today - timedelta(days=options['number_of_days'])
-  date_to_collect_str = datetime.strftime(date_to_collect,"%Y-%m-%d")
-  logging.info('Number of days prior to retrieve: ' + str(date_to_collect))
+  start_date = today - timedelta(days=options['number_of_days'])
+  start_date_str = datetime.strftime(start_date,"%Y-%m-%d")
+  logging.info('Collect data for: ' + str(start_date))
 
 else:
   logging.error('No date specified.  Exiting')
   sys.exit(1)
-date_to_collect_str = datetime.strftime(date_to_collect, "%Y-%m-%d")
-logging.info('Date to collect: ' + date_to_collect_str)
 
-# If we have a set of dates, start at the end and work backwards to the start date.  If
-# we just have a single date, start there and use the date specified.
-if 'heartrate' in options['collect_type'] or 'all' in options['collect_type']:
-  heartrate_file = options['output_dir'] + '\\' + 'hr_intraday_' + date_to_collect_str + '.csv'
-  heartrate_df = get_heartrate(oauth_client=authd_client2, start_date=date_to_collect_str, time_interval='1sec', results_file=heartrate_file)
-  print(heartrate_df.describe())
+# Iterrate trhough the days.  If we just have a single date, start there 
+# and use the date specified.
+print('number_of_days_requested = ' + str(number_of_days_requested_int))
+for d in range(0, number_of_days_requested_int):
+  start_date_str = str(start_date.strftime('%Y-%m-%d'))
+  print('start_date_short: ' + start_date_str)
+  start_date = start_date + timedelta(days=1)
+ 
+  if 'heartrate' in options['collect_type'] or 'all' in options['collect_type']:
+    heartrate_file = options['output_dir'] + '\\' + 'hr_intraday_' + start_date_str + '.csv'
+    heartrate_df = get_heartrate(oauth_client=authd_client2, start_date=start_date_str, time_interval='1sec', results_file=heartrate_file)
+    print(heartrate_df.describe())
 
-if 'steps' in options['collect_type'] or 'all' in options['collect_type']:
-  steps_file = options['output_dir'] + '\\' + 'steps_intraday_' + date_to_collect_str + '.csv'
-  steps_df = get_steps(oauth_client=authd_client2, start_date=date_to_collect_str, time_interval='15min', results_file=steps_file)
-  print(steps_df.describe())
+  if 'steps' in options['collect_type'] or 'all' in options['collect_type']:
+    steps_file = options['output_dir'] + '\\' + 'steps_intraday_' + start_date_str + '.csv'
+    steps_df = get_steps(oauth_client=authd_client2, start_date=start_date_str, time_interval='15min', results_file=steps_file)
+    print(steps_df.describe())
 
-if 'sleep' in options['collect_type'] or 'all' in options['collect_type']:
-  sleep_file = options['output_dir'] + '\\' + 'sleep_day_' + date_to_collect_str + '.csv'
-  sleep_df = get_sleep(oauth_client=authd_client2, start_date=date_to_collect, results_file=sleep_file)
-  print(sleep_df.describe())
+  if 'sleep' in options['collect_type'] or 'all' in options['collect_type']:
+    sleep_file = options['output_dir'] + '\\' + 'sleep_day_' + start_date_str + '.csv'
+    sleep_df = get_sleep(oauth_client=authd_client2, start_date=start_date, results_file=sleep_file)
+    print(sleep_df.describe())
+
