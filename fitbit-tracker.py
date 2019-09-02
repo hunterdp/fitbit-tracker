@@ -196,9 +196,9 @@ if data['access_token'] == '':
 
 # TODO(dph): Modify this to account for when the token expires
 try:
-  authd_client = fitbit.Fitbit(data['client_id'], data['client_secret'], access_token=data['access_token'])
+#  authd_client = fitbit.Fitbit(data['client_id'], data['client_secret'], access_token=data['access_token'])
   authd_client2 = fitbit.Fitbit(data['client_id'], data['client_secret'], oauth2=True, access_token=data['access_token'], refresh_token=data['refresh_token'])
-except fitbit.exceptions.HTTPUnauthorized:
+except authd_client2.exceptions.HTTPUnauthorized:
   print('Please provide latest refresh and access tokens for oauth2. Exiting program.')
   logging.error('Please provide latest refresh and access tokens for oauth2. Exiting program.')
   sys.exit(1)
