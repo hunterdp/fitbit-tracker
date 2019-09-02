@@ -193,9 +193,15 @@ if data['access_token'] == '':
   print("No access token found.  Please generate and place in the configuration file.")
   logging.error('No access token found.  Exiting.')
   sys.exit(1)
+
 # TODO(dph): Modify this to account for when the token expires
-authd_client = fitbit.Fitbit(data['client_id'], data['client_secret'], access_token=data['access_token'])
-authd_client2 = fitbit.Fitbit(data['client_id'], data['client_secret'], oauth2=True, access_token=data['access_token'], refresh_token=data['refresh_token'])
+try:
+  authd_client = fitbit.Fitbit(data['client_id'], data['client_secret'], access_token=data['access_token'])
+  authd_client2 = fitbit.Fitbit(data['client_id'], data['client_secret'], oauth2=True, access_token=data['access_token'], refresh_token=data['refresh_token'])
+except fitbit.exceptions.HTTPUnauthorized:
+  print('Please provide latest refresh and access tokens for oauth2. Exiting program.')
+  logging.error('Please provide latest refresh and access tokens for oauth2. Exiting program.')
+  sys.exit(1)
 
 # Note that that there is a limit of 150 api requests per hour. If the
 # requested number of days will exceed that, message back to the caller and exit.
@@ -241,21 +247,29 @@ else:
 print('number_of_days_requested = ' + str(number_of_days_requested_int))
 for d in range(0, number_of_days_requested_int):
   start_date_str = str(start_date.strftime('%Y-%m-%d'))
-  print('start_date_short: ' + start_date_str)
   start_date = start_date + timedelta(days=1)
- 
-  if 'heartrate' in options['collect_type'] or 'all' in options['collect_type']:
-    heartrate_file = options['output_dir'] + '\\' + 'hr_intraday_' + start_date_str + '.csv'
-    heartrate_df = get_heartrate(oauth_client=authd_client2, start_date=start_date_str, time_interval='1sec', results_file=heartrate_file)
-    print(heartrate_df.describe())
 
-  if 'steps' in options['collect_type'] or 'all' in options['collect_type']:
-    steps_file = options['output_dir'] + '\\' + 'steps_intraday_' + start_date_str + '.csv'
-    steps_df = get_steps(oauth_client=authd_client2, start_date=start_date_str, time_interval='15min', results_file=steps_file)
-    print(steps_df.describe())
+  try:
+    if 'heartrate' in options['collect_type'] or 'all' in options['collect_type']:
+      heartrate_file = options['output_dir'] + '\\' + 'hr_intraday_' + start_date_str + '.csv'
+      heartrate_df = get_heartrate(oauth_client=authd_client2, start_date=start_date_str, time_interval='1sec', results_file=heartrate_file)
+      print(heartrate_df.describe())
+  
+    if 'steps' in options['collect_type'] or 'all' in options['collect_type']:
+      steps_file = options['output_dir'] + '\\' + 'steps_intraday_' + start_date_str + '.csv'
+      steps_df = get_steps(oauth_client=authd_client2, start_date=start_date_str, time_interval='15min', results_file=steps_file)
+      print(steps_df.describe())
 
-  if 'sleep' in options['collect_type'] or 'all' in options['collect_type']:
-    sleep_file = options['output_dir'] + '\\' + 'sleep_day_' + start_date_str + '.csv'
-    sleep_df = get_sleep(oauth_client=authd_client2, start_date=start_date, results_file=sleep_file)
-    print(sleep_df.describe())
+    if 'sleep' in options['collect_type'] or 'all' in options['collect_type']:
+      sleep_file = options['output_dir'] + '\\' + 'sleep_day_' + start_date_str + '.csv'
+      sleep_df = get_sleep(oauth_client=authd_client2, start_date=start_date, results_file=sleep_file)
+      print(sleep_df.describe())
+  
+  except fitbit.exceptions.HTTPTooManyRequests:
+    print('Rate limit reached. Rerun program after 1 hour. Exiting program.')
+    print('Stopped at: ' + start_date_str)
+    logging.error('Rate limit reached. Rerun program after 1 hour. Exiting program.')
+    logging.info('Stopped at: ' + start_date_str)
+    sys.exit(1)
+
 
