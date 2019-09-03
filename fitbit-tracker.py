@@ -196,9 +196,9 @@ if data['access_token'] == '':
 
 # TODO(dph): Modify this to account for when the token expires
 try:
-#  authd_client = fitbit.Fitbit(data['client_id'], data['client_secret'], access_token=data['access_token'])
+  authd_client = fitbit.Fitbit(data['client_id'], data['client_secret'], access_token=data['access_token'])
   authd_client2 = fitbit.Fitbit(data['client_id'], data['client_secret'], oauth2=True, access_token=data['access_token'], refresh_token=data['refresh_token'])
-except authd_client2.exceptions.HTTPUnauthorized:
+except auth.exceptions.HTTPUnauthorized:
   print('Please provide latest refresh and access tokens for oauth2. Exiting program.')
   logging.error('Please provide latest refresh and access tokens for oauth2. Exiting program.')
   sys.exit(1)
@@ -264,12 +264,54 @@ for d in range(0, number_of_days_requested_int):
       sleep_file = options['output_dir'] + '\\' + 'sleep_day_' + start_date_str + '.csv'
       sleep_df = get_sleep(oauth_client=authd_client2, start_date=start_date, results_file=sleep_file)
       print(sleep_df.describe())
+
+  # Try and recover from exceptions and if not, gracefully report and exit.  
   
+  except fitbit.exceptions.HTTPBadRequest:
+    # Response code = 400.
+    print('An unhandled exception.  Exiting program.')
+    logging.error('An unhandled exception.  Exiting program.')
+    sys.exit(1)
+
+  except fitbit.exceptions.HTTPUnauthorized:
+    # Response code = 401, the token has expired, exit for now.
+    # TODO(dph): Enable the ability to refresh the token automatically.
+    print('Please provide latest refresh and access tokens for oauth2. Exiting program.')
+    logging.error('Please provide latest refresh and access tokens for oauth2. Exiting program.')
+    sys.exit(1)
+  
+  except fitbit.exceptions.HTTPForbidden:
+    # Response code = 403.
+    print('You are not allowed to excute the function requested.  Exiting program.')
+    logging.error('You are not allowed to excute the function requested.  Exiting program.')
+    sys.exit(1)
+  
+  except fitbit.exceptions.HTTPNotFound:
+    #  Response code = 404.
+    print('Requested function or data not found.  Exiting program.')
+    logging.error('Requested function or data not found.  Exiting program.')
+    sys.exit(1)
+
+  except fitbit.exceptions.HTTPConflict:
+    #  Response code = 409.
+    print('Conflict when creating resources.  Exiting program.')
+    logging.error('Conflict when creating resources.  Exiting program.')
+    sys.exit(1)
+
   except fitbit.exceptions.HTTPTooManyRequests:
-    print('Rate limit reached. Rerun program after 1 hour. Exiting program.')
+    #  Response code = 429.
+    print('Rate limit exceeded. Rerun program after 1 hour. Exiting program.')
     print('Stopped at: ' + start_date_str)
-    logging.error('Rate limit reached. Rerun program after 1 hour. Exiting program.')
+    logging.error('Rate limit exceeded. Rerun program after 1 hour. Exiting program.')
     logging.info('Stopped at: ' + start_date_str)
     sys.exit(1)
+  
+  except fitbit.exceptions.HTTPServerError:
+    # Response code = 500.
+    print('A generic error was returned.  Exiting program.')
+    logging.error('A generic error was returned.  Exiting program.')
+    sys.exit(1)
+
+  
 
 
