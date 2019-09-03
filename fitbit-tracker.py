@@ -9,9 +9,10 @@ and store it accordinly.
 
 To collect data over long periods of time, put this into a script and call it once a
 day.  This will generate a directory of data files suitable for post processing.
-"""
-# TODO(dph) Need to add in try/except error handeling when a day contains no data.
 
+Once setup with an initial OAuth2 token and refresh token, new tokens will be 
+retrieved and the configuration file will be updated.
+"""
 # Imports
 import fitbit
 import inspect
@@ -24,6 +25,7 @@ import requests
 import pandas as pandas
 import logging
 import logging.handlers
+import io
 
 from os import path
 from datetime import datetime 
@@ -36,10 +38,34 @@ __VERSION__ = 'fitbit-tracker ver beta-0.5'
 __LOG_NAME__ = 'fitbit-tracker.log'
 __TITLE__ = 'fitebit-tracker.py'
 
-# Functions
+# Set a global for the name of the configuration file.  This is used during the Oauth2 callback
+# routine when we need to refresh the tokens.
+CONFIG_FILE = ''
+
+### Functions ###
+
+def refresh_new_token (token):
+  """Called when the access token needs to be refreshed. """
+  new_access_token = token['access_token']
+  new_refresh_token = token['refresh_token']
+  new_expires_at = token['expires_at']
+  logging.info('Refreshing token.')
+  logging.info('New token will expire at: ' + str(new_expires_at))
+
+  # open the configuration file and save the new tokens.
+  with open(CONFIG_FILE) as json_config_file:
+    data = json.load(json_config_file)
+  
+  data['access_token'] = new_access_token
+  data['refresh_token'] = new_refresh_token
+  data['token_expires'] = new_expires_at
+  with open(CONFIG_FILE, 'w') as j_config_file:
+    json.dump(data, j_config_file, indent=4)
+
+# TODO(dph): Collapse the intraday functions into a single more generic one.
 def get_heartrate (oauth_client, start_date, time_interval, results_file):
-  "Retrieve the intraday heartrate at the specified interval and store in data file and returns the dataframe."
-  hr = oauth_client.intraday_time_series('activities/heart', base_date=start_date, start_time='00:00', end_time='23:59', detail_level=time_interval)
+  """Retrieve the intraday heartrate at the specified interval and store in data file and returns the dataframe."""
+  hr = oauth_client.intraday_time_series(resource='activities/heart', base_date=start_date, detail_level=time_interval, start_time='00:00', end_time='23:59')
   logging.debug(json.dumps(hr, indent=2))
   t_list = []
   v_list = []
@@ -52,7 +78,7 @@ def get_heartrate (oauth_client, start_date, time_interval, results_file):
 
 def get_steps (oauth_client, start_date, time_interval, results_file):
   "Retrieve the step count for the day at the specified interval and store in datafile."
-  hr = oauth_client.intraday_time_series('activities/steps', base_date=start_date, start_time='00:00', end_time='23:59', detail_level=time_interval)
+  hr = oauth_client.intraday_time_series(resource='activities/steps', base_date=start_date, start_time='00:00', end_time='23:59', detail_level=time_interval)
   logging.debug(json.dumps(hr, indent=2))
   t_list = []
   v_list = []
@@ -93,11 +119,8 @@ def set_command_options():
   parser.add_argument('--days', help='number of days to go back', action='store', type=int, dest='number_of_days')
   parser.add_argument('-e', '--end_date',  help='end date to collect data from (yyyy-mm-dd)', action='store', type=str,  dest='end_date')                    
   parser.add_argument('-s', '--start_date',  help='start date to collect data from (yyyy-mm-dd)', action='store', type=str,  dest='start_date')                    
-
   group.add_argument('-a', '--all', help='collect all the data possible', action='store_true')
   group.add_argument('-t', '--type', help='collect only the type of data specified (heartrate, sleep, steps)', action='store', type=str, dest='collect_type')
-
-
   args = parser.parse_args()
   return(parser);
 
@@ -184,8 +207,9 @@ def get_command_options(parser):
 
 parser = set_command_options()
 options = get_command_options(parser)
+CONFIG_FILE = options['config_file']
 
-with open(options['config_file']) as json_config_file:
+with open(CONFIG_FILE) as json_config_file:
   data = json.load(json_config_file)
   
 # Connect to the fitbit server using oauth2 See the page https://dev.fitbit.com/build/reference/web-api/oauth2/
@@ -194,10 +218,9 @@ if data['access_token'] == '':
   logging.error('No access token found.  Exiting.')
   sys.exit(1)
 
-# TODO(dph): Modify this to account for when the token expires
 try:
   authd_client = fitbit.Fitbit(data['client_id'], data['client_secret'], access_token=data['access_token'])
-  authd_client2 = fitbit.Fitbit(data['client_id'], data['client_secret'], oauth2=True, access_token=data['access_token'], refresh_token=data['refresh_token'])
+  authd_client2 = fitbit.Fitbit(data['client_id'], data['client_secret'], oauth2=True, access_token=data['access_token'], refresh_token=data['refresh_token'], refresh_cb=refresh_new_token)
 except auth.exceptions.HTTPUnauthorized:
   print('Please provide latest refresh and access tokens for oauth2. Exiting program.')
   logging.error('Please provide latest refresh and access tokens for oauth2. Exiting program.')
