@@ -62,7 +62,6 @@ def refresh_new_token (token):
   with open(CONFIG_FILE, 'w') as j_config_file:
     json.dump(data, j_config_file, indent=4)
 
-# TODO(dph): Collapse the intraday functions into a single more generic one.
 def get_heartrate (oauth_client, start_date, time_interval, results_file):
   """Retrieve the intraday heartrate at the specified interval and store in data file and returns the dataframe."""
   hr = oauth_client.intraday_time_series(resource='activities/heart', base_date=start_date, detail_level=time_interval, start_time='00:00', end_time='23:59')
@@ -110,17 +109,21 @@ def set_command_options():
   usage = 'Retrieves various information from the Fitbit website.'
   parser = argparse.ArgumentParser(prog='Fitbit Tracker', description=usage, formatter_class=argparse.RawDescriptionHelpFormatter)
   group = parser.add_mutually_exclusive_group(required=True)
-  
+  group_2 = parser.add_mutually_exclusive_group(required=True)
   parser.add_argument('configfile', help='Name of the configuration file. (default: %(default)s)', type=str, default='config.json')
   parser.add_argument('-d', '--debug_level', help='Set the debug level [debug info warn] (default: %(default)s)', action='store', type=str, default='info')
   parser.add_argument('-l', '--log_file', help='Set the logfile name. (default: %(default)s)', action='store', type=str, default='fitbit-tracker.log')
-  parser.add_argument('-o', '--output',  help='output directory to store results files. (default: %(default)s)', action='store', type=str,  dest='output_dir', default='results')                    
-  parser.add_argument('-v', '--version', help='prints the version', action='version', version=__VERSION__)
-  parser.add_argument('--days', help='number of days to go back', action='store', type=int, dest='number_of_days')
-  parser.add_argument('-e', '--end_date',  help='end date to collect data from (yyyy-mm-dd)', action='store', type=str,  dest='end_date')                    
-  parser.add_argument('-s', '--start_date',  help='start date to collect data from (yyyy-mm-dd)', action='store', type=str,  dest='start_date')                    
-  group.add_argument('-a', '--all', help='collect all the data possible', action='store_true')
-  group.add_argument('-t', '--type', help='collect only the type of data specified (heartrate, sleep, steps)', action='store', type=str, dest='collect_type')
+  parser.add_argument('-o', '--output',  help='Output directory to store results files. (default: %(default)s)', action='store', type=str,  dest='output_dir', default='results')                    
+  parser.add_argument('-v', '--version', help='Prints the version', action='version', version=__VERSION__)
+  parser.add_argument('-e', '--end_date',  help='End date to collect data from (yyyy-mm-dd)', action='store', type=str,  dest='end_date')                    
+  parser.add_argument('-s', '--start_date',  help='Start date to collect data from (yyyy-mm-dd)', action='store', type=str,  dest='start_date')                    
+  
+  group.add_argument('-a', '--all', help='Collect all the data possible', action='store_true')
+  group.add_argument('-t', '--type', help='Collect only the type of data specified (heartrate, sleep, steps)', action='store', type=str, dest='collect_type')
+
+  group_2.add_argument('--days', help='Number of days to go back', action='store', type=int, dest='number_of_days')
+  group_2.add_argument('--date', help='Specifc date to collect for', action='store', type=str, dest='date_to_collect')
+
   args = parser.parse_args()
   return(parser);
 
@@ -167,8 +170,9 @@ def get_command_options(parser):
       sys.exit(1)
   
   # Retrieve the the day(s) to collect data for
-  if args.number_of_days and (args.start_date or args.end_date ):
-    logging.error('You can not specify both a start/end date and number of days.  Exiting')
+  if ((args.number_of_days and (args.start_date or args.end_date )) 
+    or (args.date_to_collect and (args.start_date or args.end_date))):
+    logging.error('Illegal date specifications.  Exiting')
     sys.exit(1)
 
   elif args.number_of_days:
@@ -180,6 +184,11 @@ def get_command_options(parser):
       options['number_of_days'] = args.number_of_days
       logging.info("Number of days previous: " + str(options['number_of_days']))
   
+  elif args.date_to_collect:
+    # Collect for a specific day
+    options['date_to_collect'] = args.date_to_collect
+    logging.info("Date to collect for: " + str(options['date_to_collect']))
+  
   elif args.start_date and args.end_date:
     # Use start and end dates
     options['start_date'] = args.start_date
@@ -189,6 +198,7 @@ def get_command_options(parser):
     if args.start_date > args.end_date:
       logging.error("Start date is after end date.  Exiting.")
       sys.exit(1)
+
   else:
     # Start and end date not specified.
     logging.error('Both start and end dates need to be specified.  Exiting.')
@@ -261,6 +271,11 @@ elif 'number_of_days' in options:
   start_date_str = datetime.strftime(start_date,"%Y-%m-%d")
   logging.info('Collect data for: ' + str(start_date))
 
+elif 'date_to_collect' in options:
+  start_date = datetime.strptime(options['date_to_collect'], '%Y-%m-%d')
+  start_date_str = str(start_date)
+  logging.info('Collect for the specific date:' + start_date_str)
+
 else:
   logging.error('No date specified.  Exiting')
   sys.exit(1)
@@ -273,6 +288,7 @@ for d in range(0, number_of_days_requested_int):
   start_date = start_date + timedelta(days=1)
 
   try:
+    print('Collecting data for: ' + start_date_str)
     if 'heartrate' in options['collect_type'] or 'all' in options['collect_type']:
       heartrate_file = options['output_dir'] + '\\' + 'hr_intraday_' + start_date_str + '.csv'
       heartrate_df = get_heartrate(oauth_client=authd_client2, start_date=start_date_str, time_interval='1sec', results_file=heartrate_file)
