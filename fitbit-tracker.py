@@ -12,6 +12,8 @@ day.  This will generate a directory of data files suitable for post processing.
 
 Once setup with an initial OAuth2 token and refresh token, new tokens will be 
 retrieved and the configuration file will be updated.
+
+TODO(dph): Fix the debug switch
 """
 # Imports
 import fitbit
@@ -65,25 +67,37 @@ def refresh_new_token (token):
 def get_heartrate (oauth_client, start_date, time_interval, results_file):
   """Retrieve the intraday heartrate at the specified interval and store in data file and returns the dataframe."""
   hr = oauth_client.intraday_time_series(resource='activities/heart', base_date=start_date, detail_level=time_interval, start_time='00:00', end_time='23:59')
-  logging.debug(json.dumps(hr, indent=2))
+  logging.info(json.dumps(hr, indent=2))
   t_list = []
   v_list = []
-  for i in hr['activities-heart-intraday']['dataset']:
-    v_list.append(i['value'])
-    t_list.append(i['time'])
+
+  # Only save the data if there is any.
+  if hr['activities-heart'][0]['value'] != 0:
+    for i in hr['activities-heart-intraday']['dataset']:
+      v_list.append(i['value'])
+      t_list.append(i['time'])
+  else:
+    logging.info("No heartrate data for " + str(start_date))
+
   df = pandas.DataFrame({'Time':t_list,'Heart Rate':v_list})
   df.to_csv(results_file, columns=['Time','Heart Rate'], header=True, index=False)
   return(df);
 
 def get_steps (oauth_client, start_date, time_interval, results_file):
   "Retrieve the step count for the day at the specified interval and store in datafile."
-  hr = oauth_client.intraday_time_series(resource='activities/steps', base_date=start_date, start_time='00:00', end_time='23:59', detail_level=time_interval)
-  logging.debug(json.dumps(hr, indent=2))
+  steps = oauth_client.intraday_time_series(resource='activities/steps', base_date=start_date, start_time='00:00', end_time='23:59', detail_level=time_interval)
+  logging.info(json.dumps(steps, indent=2))
   t_list = []
   v_list = []
-  for i in hr['activities-steps-intraday']['dataset']:
-    v_list.append(i['value'])
-    t_list.append(i['time'])
+
+  # Only save the data if there is any.
+  if steps['activities-steps'][0]['value'] != 0:
+    for i in steps['activities-steps-intraday']['dataset']:
+      v_list.append(i['value'])
+      t_list.append(i['time'])
+  else:
+    logging.info("No step data for " + str(start_date))
+
   df = pandas.DataFrame({'Time':t_list,'Steps':v_list})
   df.to_csv(results_file, columns=['Time','Steps'], header=True, index=False)
   return(df);
@@ -93,12 +107,18 @@ def get_sleep (oauth_client, start_date, results_file):
   # Retrieve the sleep data.  We need to translate the "value" if sleep into the different categories so
   # it can be aligned with the heartbeat data.  Maping for the values are: 1-asleep, 2-restless, 3-awake
   sleep = authd_client2.get_sleep(start_date)
-  logging.debug(json.dumps(sleep, indent=2))
+  logging.info(json.dumps(sleep, indent=2))
   t_list = []
   v_list = []
-  for i in sleep['sleep'][0]['minuteData']:
-    v_list.append(i['value'])
-    t_list.append(i['dateTime'])
+
+  # Only save the data if there is any.
+  if sleep['summary']['totalMinutesAsleep'] != 0:
+    for i in sleep['sleep'][0]['minuteData']:
+      v_list.append(i['value'])
+      t_list.append(i['dateTime'])
+  else:
+    logging.info("No sleep data for " + str(start_date))
+
   df = pandas.DataFrame({'Time':t_list,'Sleep Type':v_list})
   df.to_csv(results_file, columns=['Time','Sleep Type'], header=True, index=False)
   return(df);
@@ -116,11 +136,11 @@ def set_command_options():
   parser.add_argument('-o', '--output',  help='Output directory to store results files. (default: %(default)s)', action='store', type=str,  dest='output_dir', default='results')                    
   parser.add_argument('-v', '--version', help='Prints the version', action='version', version=__VERSION__)
   parser.add_argument('-e', '--end_date',  help='End date to collect data from (yyyy-mm-dd)', action='store', type=str,  dest='end_date')                    
-  parser.add_argument('-s', '--start_date',  help='Start date to collect data from (yyyy-mm-dd)', action='store', type=str,  dest='start_date')                    
   
   group.add_argument('-a', '--all', help='Collect all the data possible', action='store_true')
   group.add_argument('-t', '--type', help='Collect only the type of data specified (heartrate, sleep, steps)', action='store', type=str, dest='collect_type')
 
+  group_2.add_argument('-s', '--start_date',  help='Start date to collect data from (yyyy-mm-dd)', action='store', type=str,  dest='start_date')                    
   group_2.add_argument('--days', help='Number of days to go back', action='store', type=int, dest='number_of_days')
   group_2.add_argument('--date', help='Specifc date to collect for', action='store', type=str, dest='date_to_collect')
 
@@ -273,7 +293,7 @@ elif 'number_of_days' in options:
 
 elif 'date_to_collect' in options:
   start_date = datetime.strptime(options['date_to_collect'], '%Y-%m-%d')
-  start_date_str = str(start_date)
+  start_date_str = options['date_to_collect']
   logging.info('Collect for the specific date:' + start_date_str)
 
 else:
