@@ -45,7 +45,6 @@ __TITLE__ = 'fitebit-tracker.py'
 # routine when we need to refresh the tokens.
 CONFIG_FILE = ''
 
-
 def refresh_new_token(token):
     """Called when the access token needs to be refreshed. """
     new_access_token = token['access_token']
@@ -64,6 +63,14 @@ def refresh_new_token(token):
     with open(CONFIG_FILE, 'w') as j_config_file:
         json.dump(data, j_config_file, indent=4)
 
+def is_valid_date(date_to_check):
+  """ Checks to see if the date is valid """
+  year,month,day = date_to_check.split('-',3)
+  try :
+    date(int(year), int(month), int(day))
+  except ValueError :
+    return(False)
+  return(True)
 
 def get_heartrate(oauth_client, start_date, time_interval, results_file):
   """ Retrieve the intraday heartrate data and store to a file.
@@ -186,9 +193,9 @@ def set_command_options():
     args = parser.parse_args()
     return(parser)
 
-
 def get_command_options(parser):
-    "Retrieves the command line options and returns a kv dict"
+    """ Retrieves the command line options and returns a kv dict """
+    
     args = parser.parse_args()
     fmt = "%(asctime)-15s %(levelname)-8s %(message)s"
     log_file = args.log_file
@@ -200,7 +207,7 @@ def get_command_options(parser):
         options['collect_type'] = 'steps heartrate sleep'
     elif args.collect_type:
         options['collect_type'] = args.collect_type
-        func = inspect.currentframe()
+#        func = inspect.currentframe()
         logging.info('Collecting information for: ' + args.collect_type)
     else:
         logging.warning(
@@ -208,6 +215,7 @@ def get_command_options(parser):
         sys.exit(1)
 
     # Set the desired logging level
+    # TODO(dph): Fix this as it doesn't really work.
     if args.debug_level:
         if 'debug' in args.debug_level:
             logging.basicConfig(level=logging.DEBUG)
@@ -249,18 +257,31 @@ def get_command_options(parser):
 
     elif args.date_to_collect:
         # Collect for a specific day
-        options['date_to_collect'] = args.date_to_collect
-        logging.info("Date to collect for: " + str(options['date_to_collect']))
+        if is_valid_date(args.date_to_collect): 
+            options['date_to_collect'] = args.date_to_collect
+            logging.info("Date to collect for: " + str(options['date_to_collect']))
+        else:
+            print('Invalid date specified.  Exiting.')
+            logging.error('Invalid date: ' + str(args.date_to_collect))
+            sys.exit(1)
 
     elif args.start_date and args.end_date:
-        # Use start and end dates
-        options['start_date'] = args.start_date
-        options['end_date'] = args.end_date
-        logging.info('Start date: ' + args.start_date)
-        logging.info('End date: ' + args.end_date)
-        if args.start_date > args.end_date:
+        if not is_valid_date(args.start_date):
+            print('Invalid start date specified.  Exiting.')
+            logging.error('Invalid start date: ' + str(args.start_date))
+            sys.exit(1)
+        elif not is_valid_date(args.end_date):
+            print('Invalid end date specified.  Exiting.')
+            logging.error('Invalid end date: ' + str(args.end_date))
+            sys.exit(1)
+        elif args.start_date > args.end_date:
             logging.error("Start date is after end date. Exiting.")
             sys.exit(1)
+        else:
+            options['start_date'] = args.start_date
+            options['end_date'] = args.end_date
+            logging.info('Start date: ' + args.start_date)
+            logging.info('End date: ' + args.end_date)
 
     else:
         # Start and end date not specified.
@@ -331,14 +352,11 @@ if __name__ == '__main__':
         start_date = datetime.strptime(options['start_date'], '%Y-%m-%d')
         end_date = datetime.strptime(options['end_date'], '%Y-%m-%d')
         number_of_days_requested = end_date - start_date
-        number_of_days_requested_int = getattr(
-            number_of_days_requested, 'days')
-
+        number_of_days_requested_int = getattr(number_of_days_requested, 'days')
         logging.info('Startdate:' + str(start_date))
         logging.info('Enddate:' + str(end_date))
         logging.info('Days requested vale: ' + str(number_of_days_requested))
-        logging.info('Number of interger days requested: ' +
-                     str(number_of_days_requested_int))
+        logging.info('Number of interger days requested: ' + str(number_of_days_requested_int))
 
         if number_of_days_requested_int > max_days:
             logging.error(
@@ -361,7 +379,7 @@ if __name__ == '__main__':
         logging.error('No date specified.  Exiting')
         sys.exit(1)
 
-    # Iterrate trhough the days.  If we just have a single date, start there
+    # Iterrate through the days.  If we just have a single date, start there
     # and use the date specified.
     print('number_of_days_requested = ' + str(number_of_days_requested_int))
     for d in range(0, number_of_days_requested_int):
@@ -400,8 +418,7 @@ if __name__ == '__main__':
             sys.exit(1)
 
         except fitbit.exceptions.HTTPUnauthorized:
-            # Response code = 401, the token has expired, exit for now.
-            # TODO(dph): Enable the ability to refresh the token automatically.
+            # Response code = 401, the token has expired, exit for now.  We should not get here.
             print(
                 'Please provide latest refresh and access tokens for oauth2. Exiting program.')
             logging.error(
