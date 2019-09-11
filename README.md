@@ -87,6 +87,6 @@ config.json - JSON configuration file.  Note that this contains secrets so do no
 fitbit-analysis.py - Generates basic analysis of the data.
 
 ## Acknowledgements
-[Oregon Center for Applied Science - ORCA](https://github.com/orcasgit/python-fitbit) - Fitbit API Python Client Implementation
-[Python Data Science Handbook](https://tanthiamhuat.files.wordpress.com/2018/04/pythondatasciencehandbook.pdf) - Excellent introductory book.
+1. [Oregon Center for Applied Science - ORCA](https://github.com/orcasgit/python-fitbit) - Fitbit API Python Client Implementation
+1. [Python Data Science Handbook](https://tanthiamhuat.files.wordpress.com/2018/04/pythondatasciencehandbook.pdf) - Excellent introductory book.
 
