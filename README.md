@@ -82,11 +82,11 @@ optional arguments:
 ```
 
 ## Files
-fitbit-tracker.py - Collects fitbit data and stores the results into a timeseries csv file(s)
-config.json - JSON configuration file.  Note that this contains secrets so do not store on public systems
-fitbit-analysis.py - Generates basic analysis of the data.
+* fitbit-tracker.py - Collects fitbit data and stores the results into a timeseries csv file(s)
+* config.json - JSON configuration file.  Note that this contains secrets so do not store on public systems
+* fitbit-analysis.py - Generates basic analysis of the data.
 
 ## Acknowledgements
-1. [Oregon Center for Applied Science - ORCA](https://github.com/orcasgit/python-fitbit) - Fitbit API Python Client Implementation
-1. [Python Data Science Handbook](https://tanthiamhuat.files.wordpress.com/2018/04/pythondatasciencehandbook.pdf) - Excellent introductory book.
+* [Oregon Center for Applied Science - ORCA](https://github.com/orcasgit/python-fitbit) - Fitbit API Python Client Implementation
+* [Python Data Science Handbook](https://tanthiamhuat.files.wordpress.com/2018/04/pythondatasciencehandbook.pdf) - Excellent introductory book.
 
