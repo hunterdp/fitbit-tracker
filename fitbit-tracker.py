@@ -14,8 +14,6 @@ Once setup with an initial OAuth2 token and refresh token, new tokens will be
 retrieved and the configuration file will be updated.
 """
 
-# TODO(dph): Fix the debug switch
-
 # Imports
 import fitbit
 import inspect
@@ -90,7 +88,7 @@ def get_heartrate(oauth_client, start_date, time_interval, results_file):
                                            detail_level=time_interval,
                                            start_time='00:00',
                                            end_time='23:59')
-  logging.info(json.dumps(hr, indent=2))
+  logging.debug(json.dumps(hr, indent=2))
   # Only save the data if there is any.
   if hr['activities-heart'][0]['value'] != 0:
       t_list = []
@@ -116,7 +114,7 @@ def get_steps(oauth_client, start_date, time_interval, results_file):
                                               start_time='00:00', 
                                               end_time='23:59', 
                                               detail_level=time_interval)
-    logging.info(json.dumps(steps, indent=2))
+    logging.debug(json.dumps(steps, indent=2))
 
     # Only save the data if there is any.
     if steps['activities-steps'][0]['value'] != 0:
@@ -139,7 +137,7 @@ def get_sleep(oauth_client, start_date, results_file):
     # Retrieve the sleep data.  We need to translate the "value" if sleep into the different categories so
     # it can be aligned with the heartbeat data.  Maping for the values are: 1-asleep, 2-restless, 3-awake
     sleep = authd_client2.get_sleep(start_date)
-    logging.info(json.dumps(sleep, indent=2))
+    logging.debug(json.dumps(sleep, indent=2))
     t_list = []
     v_list = []
 
@@ -214,12 +212,11 @@ def get_command_options(parser):
             'You need to specify the type of data to collect or use the -a flag')
         sys.exit(1)
 
-    # Set the desired logging level
-    # TODO(dph): Fix this as it doesn't really work.
+    # Set the desired logging level.  Default is error.
     if args.debug_level:
         if 'debug' in args.debug_level:
             logging.basicConfig(level=logging.DEBUG)
-        if 'warn' in args.debug_level:
+        elif 'warn' in args.debug_level:
             logging.basicConfig(level=logging.WARNING)
         elif 'info' in args.debug_level:
             logging.basicConfig(level=logging.INFO)
@@ -227,8 +224,11 @@ def get_command_options(parser):
             logging.basicConfig(level=logging.ERROR)
         else:
             logging.basicConfig(level=logging.ERROR)
-            logging.error('Invalid debug level.  Exiting the program.')
+            logging.error('Invalid debug level: ' + args.debug_level + '. Exiting the program.')
             sys.exit(1)
+    else:
+        logging.basicConfig(level=logging.INFO)
+    logging.info('Set the logging level to: ' + args.debug_level)
 
     # Use the specified configuration file.  There is no default.
     if args.configfile:
