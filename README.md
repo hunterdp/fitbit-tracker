@@ -5,6 +5,10 @@ Rather than writing a new requests based application, I choose to use the fitbit
 
 For the data analyutics tools, I used standard Python data science utilities.  Each new tools is a separate module.  This simplifies dependencies.  I may make them all into a library of thier own at some point.
 
+## Requirements
+* Python version: 3 (It may work on 2.7+)
+* Python Package: numpy, pandas, matplotlib, seaborn, fitbit
+
 ## Setup
 1.  You need to create and register a fitbit application [here](https://dev.fitbit.com/apps/new).  Make sure that you select that this is a personal application.  If you do not, you will not be able to retrieve intraday data.
 1.  Go to the application you just registered and select it.  
@@ -13,7 +17,7 @@ For the data analyutics tools, I used standard Python data science utilities.  E
 1.  Select the scopes you want to allow (typically heartrate, profile, sleep, activity, settings and profile).
 1.  Enter in a time frame for token expiration.  Look at the docs to see the allowed values.
 1.  Follow the rest of the instructions on the page so that you get both an *OAuth 2.0 token* and a *refresh token*.
-1.  Modify the sample config.json filewith your specific values.  Note that you need to supply all values.
+1.  Modify the sample config.json filewith your specific values.  Note that you need to supply all values.  If you do not enter the refresh_token, the application will exit when the token expires.
 
 ## Fitbit Tracker Usage 
 ```
