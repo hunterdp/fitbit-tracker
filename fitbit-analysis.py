@@ -363,7 +363,7 @@ if __name__ == '__main__':
   #profile = merge_df.profile_report(title='Merged Dataframe Report')
   #profile.to_file(output='profile_report.html')
 
-  plt.plot(merge_df)
+  plt.plot(x=merge_df[0], y=merge_df[1:] )
   #plt.plot(summary_df)
   # Finally show the plots/charts.  Only call this at the end.
   plt.show()
