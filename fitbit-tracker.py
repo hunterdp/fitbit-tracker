@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
 """Simple retrieving of fitbit information.
 
-A simple module to collect fitbit information, parse it and store it in csv files. 
+A simple module to collect fitbit information, parse it and store it in csv files.
 The configuration infomration is read from the .json file passed in and must be submitted.
-There are various command line options that allow the collectin of a specified day in 
+There are various command line options that allow the collectin of a specified day in
 relation to the current day.  By default the program will collect data from yesterday
 and store it accordinly.
 
 To collect data over long periods of time, put this into a script and call it once a
 day.  This will generate a directory of data files suitable for post processing.
 
-Once setup with an initial OAuth2 token and refresh token, new tokens will be 
+Once setup with an initial OAuth2 token and refresh token, new tokens will be
 retrieved and the configuration file will be updated.
 """
 
@@ -106,13 +106,13 @@ def get_heartrate(oauth_client, start_date, time_interval, results_file):
 
 
 def get_steps(oauth_client, start_date, time_interval, results_file):
-    """Retrieve the step count for the day at the specified interval, store 
+    """Retrieve the step count for the day at the specified interval, store
        data in a file and returns the data in a panda dataframe.
     """
     steps = oauth_client.intraday_time_series(resource='activities/steps',
-                                              base_date=start_date, 
-                                              start_time='00:00', 
-                                              end_time='23:59', 
+                                              base_date=start_date,
+                                              start_time='00:00',
+                                              end_time='23:59',
                                               detail_level=time_interval)
     logging.debug(json.dumps(steps, indent=2))
 
@@ -154,7 +154,6 @@ def get_sleep(oauth_client, start_date, results_file):
               'Time', start_date], header=True, index=False)
     return(df)
 
-
 def set_command_options():
     "Sets the command line arguments."
     # Setup the valid arguments and then process.  Note we must have a configuration file.
@@ -193,7 +192,7 @@ def set_command_options():
 
 def get_command_options(parser):
     """ Retrieves the command line options and returns a kv dict """
-    
+
     args = parser.parse_args()
     fmt = "%(asctime)-15s %(levelname)-8s %(message)s"
     log_file = args.log_file
@@ -215,7 +214,8 @@ def get_command_options(parser):
     # Set the desired logging level.  Default is error.
     if args.debug_level:
         if 'debug' in args.debug_level:
-            logging.basicConfig(level=logging.DEBUG)
+            logging.basicConfig(level='DEBUG')
+            __DEBUG__ = True
         elif 'warn' in args.debug_level:
             logging.basicConfig(level=logging.WARNING)
         elif 'info' in args.debug_level:
@@ -257,7 +257,7 @@ def get_command_options(parser):
 
     elif args.date_to_collect:
         # Collect for a specific day
-        if is_valid_date(args.date_to_collect): 
+        if is_valid_date(args.date_to_collect):
             options['date_to_collect'] = args.date_to_collect
             logging.info("Date to collect for: " + str(options['date_to_collect']))
         else:
@@ -309,14 +309,13 @@ if __name__ == '__main__':
 
     # Connect to the fitbit server using oauth2 See the page https://dev.fitbit.com/build/reference/web-api/oauth2/
     if data['access_token'] == '':
-        print(
-            "No access token found.  Please generate and place in the configuration file.")
+        print("No access token found.  Please generate and place in the configuration file.")
         logging.error('No access token found.  Exiting.')
         sys.exit(1)
 
     try:
         authd_client = fitbit.Fitbit(data['client_id'],
-                                     data['client_secret'], 
+                                     data['client_secret'],
                                      access_token=data['access_token'])
         authd_client2 = fitbit.Fitbit(data['client_id'],
                                       data['client_secret'],
@@ -326,10 +325,8 @@ if __name__ == '__main__':
                                       refresh_cb=refresh_new_token)
 
     except auth.exceptions.HTTPUnauthorized:
-        print(
-            'Please provide latest refresh and access tokens for oauth2. Exiting program.')
-        logging.error(
-            'Please provide latest refresh and access tokens for oauth2. Exiting program.')
+        print('Please provide latest refresh and access tokens for oauth2. Exiting program.')
+        logging.error('Please provide latest refresh and access tokens for oauth2. Exiting program.')
         sys.exit(1)
 
     # Note that that there is a limit of 150 api requests per hour. If the
@@ -393,14 +390,14 @@ if __name__ == '__main__':
                     '\\' + 'hr_intraday_' + start_date_str + '.csv'
                 heartrate_df = get_heartrate(oauth_client=authd_client2,
                                              start_date=start_date_str, time_interval='1sec', results_file=heartrate_file)
-                print(heartrate_df.describe())
+                # print(heartrate_df.describe())
 
             if 'steps' in options['collect_type'] or 'all' in options['collect_type']:
                 steps_file = options['output_dir'] + '\\' + \
                     'steps_intraday_' + start_date_str + '.csv'
                 steps_df = get_steps(oauth_client=authd_client2, start_date=start_date_str,
                                      time_interval='15min', results_file=steps_file)
-                print(steps_df.describe())
+#                print(steps_df.describe())
 
             if 'sleep' in options['collect_type'] or 'all' in options['collect_type']:
                 sleep_file = options['output_dir'] + '\\' + \
@@ -410,7 +407,6 @@ if __name__ == '__main__':
                 print(sleep_df.describe())
 
         # Try and recover from exceptions and if not, gracefully report and exit.
-
         except fitbit.exceptions.HTTPBadRequest:
             # Response code = 400.
             print('An unhandled exception.  Exiting program.')
