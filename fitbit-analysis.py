@@ -7,6 +7,7 @@ a series of data insights, graphs, charts and/or tables.
 """
 # TODO(dph): Think about ading a configuration file as the options get more complicated
 #            with regards to statistics
+# TODO(dph): Add progess notification to the user.  This helps with large data sets.
 
 import argparse
 import io
@@ -59,7 +60,8 @@ def set_command_options():
                         action='store', type=str,  dest='end_date')
     msg = 'Set the types of statistics to calculate for the collected data.  The options are min, middle or max.  Note that max will take a long time.'
     parser.add_argument('--stats', help=msg, action='store', dest='stats_to_calc', type=str, default='min')
-
+    msg = 'Interpolate missing data based on surrounding values in the same day.'
+    parser.add_argument('--interpolate', help=msg, action='store', dest='interp_data', type=bool, default='no')
 
     type_group.add_argument(
         '-a', '--all', help='Analyze all the data possible', action='store_true')
@@ -72,7 +74,7 @@ def set_command_options():
                             action='store', type=int, dest='number_of_days')
     date_group.add_argument('--date', help='Specifc date to collect for',
                             action='store', type=str, dest='date_to_collect')
-    args = parser.parse_args()
+
     return(parser)
 
 
@@ -211,8 +213,7 @@ def date_range(start, end):
   return[start+timedelta(days=i) for i in range(r)]
 
 def get_date_frag(options):
-  """ Creates a list of file fragment using the date """
-
+  """ Returns a list of file fragment using the dates specified in the options array """
   if 'end_date' in options and 'start_date' in options:
       start_date = datetime.strptime(options['start_date'], '%Y-%m-%d')
       end_date = datetime.strptime(options['end_date'], '%Y-%m-%d')
@@ -281,15 +282,27 @@ def interpolate_gaps(values, limit=None):
 
     return filled
 
+def generate_stats(df, axis):
+  """ Given a dataframe, return a dataframe with stats along the given axis"""
+  stats_df = pd.DataFrame()
+  stats_df['Mean'] = df.mean(axis=axis)
+  stats_df['Median'] = df.median(axis=axis)
+  stats_df['Min'] = df.min(axis=axis)
+  stats_df['Max'] = df.max(axis=axis)
+  stats_df['StdDev'] = df.std(axis=axis)
+  return stats_df
+
 ##### MAIN PROG STARTS HERE #####
 if __name__ == '__main__':
   parser = set_command_options()
   options = get_command_options(parser)
+
   frag_list = get_date_frag(options)
   index_file = options['output_dir'] + '/intraday_index.csv'
 
-  # Using the date fragments, generate the list of files to retrieve
+  # Generate the list of files to retrieve, keeping track of missing dates.
   file_list = list()
+  missing_files = list()
   for frag in frag_list:
     if 'heartrate' in options['analyze_type']:
       f1 = options['output_dir'] + '/hr_intraday_' + str(frag) + '.csv'
@@ -299,6 +312,8 @@ if __name__ == '__main__':
       f1 = options['output_dir'] + '/sleep_day_' + str(frag) + '.csv'
     if os.path.exists(f1):
       file_list.append(f1)
+    else:
+        missing_files.append(f1)
 
   # If no files match, just report and exit.
   if len(file_list) == 0:
@@ -308,8 +323,13 @@ if __name__ == '__main__':
       exit(-1)
 
   logging.debug(file_list)
+  logging.debug(missing_files)
   logging.info('The number of elements in file_list is: ' + str(len(file_list)))
   logging.info('The number of elements in frag_list is: ' + str(len(frag_list)))
+  if len(file_list) != len(frag_list):
+    for f in missing_files:
+      msg = 'Missing file: ' + f
+      print(msg)
 
   # TODO(dph): Finish implmenting the case to calculate all the analysis for all
   # of the available data files in the directory indicated.
@@ -325,12 +345,16 @@ if __name__ == '__main__':
   # as the FitBit second intervals can vary day to day.
   create_index_file(index_file, start='00:00:00', end='23:59:59', freq='S')
   merge_df = get_dataframe(index_file)
-  summary_df = get_dataframe(index_file)
 
   for fname in file_list:
+    msg = 'Merging ' + fname
+    print(msg)
     hr_df = get_dataframe(fname)
     merge_df = pd.merge(merge_df, hr_df, left_index=True, right_index=True, how='left')
   merge_df.index.name = 'Time'
+
+#  print('Generating plot of merged dataframe.')
+#  merge_df.plot()
 
   # TODO(dph): Keep track of the dropped dates and report them in the log.
   # Look for any days that have all NaaN values and just drop them.  This is best rather than
@@ -344,28 +368,42 @@ if __name__ == '__main__':
   # assuming that the next value (fwd or bckwd) would be the logical value.  If we interpolate
   # along the row, aka: time based (axis=0), we assume that more often than not the missing
   # value is relatively constant across time.
+
   # TODO(dph): Explore the use of the limit_area, limit and limit_direction arguments to see if
   #            what the differences are.  Alternatively make it an optional.
 
+  print('\nOriginal Merged Dataframe\n')
   print(merge_df.head(50))
-  merge_df.interpolate(method='linear', axis=0, inplace=True, limit_direction='both')
-  print(merge_df.head(50))
+  time_summary_df = pd.DataFrame()
+  day_summary_df = pd.DataFrame()
+  time_summary_df = generate_stats(merge_df, 1)
+  day_summary_df  = generate_stats(merge_df, 0)
+  print('Time summary of original merged dataframe\n')
+  print('The total number of NaaN values is: ' + str(merge_df.isnull().sum().sum()))
+  print(time_summary_df)
+  print(day_summary_df)
 
-  # Calculate some statistics for the rows and store it in a new dataframe
-  summary_df['Mean'] = merge_df.mean(axis=1)
-  summary_df['Median'] = merge_df.median(axis=1)
-  summary_df['Min'] = merge_df.min(axis=1)
-  summary_df['Max'] = merge_df.max(axis=1)
-  summary_df['StdDev'] = merge_df.std(axis=1)
+  print('Time summary of interpolated merged dataframe\n')
+  interp_time_summary_df = pd.DataFrame()
+  interp_day_summary_df = pd.DataFrame()
+  interp_merge_df = merge_df.copy(deep=True)
+  interp_merge_df.interpolate(method='linear', axis=0, inplace=True, limit_direction='both')
+  print('\nOriginal Interpolated Dataframe\n')
+  print(interp_merge_df.head(50))
+  interp_time_summary_df = generate_stats(interp_merge_df, 1)
+  interp_day_summary_df  = generate_stats(interp_merge_df, 0)
+  print('The total number of NaaN values is: ' + str(interp_merge_df.isnull().sum().sum()))
+  print(interp_time_summary_df)
+  print(interp_day_summary_df)
 
-  # Generate a profile of the dataframe. Note that this takes a long time and
-  # should be shifted to an option vs all the time.
-  #profile = merge_df.profile_report(title='Merged Dataframe Report')
-  #profile.to_file(output='profile_report.html')
+  # Examine the difference between the
 
-  plt.plot(x=merge_df[0], y=merge_df[1:] )
-  #plt.plot(summary_df)
+#  print('Generating plot of summary statistics based on time.')
+#  time_summary_df.plot()
+#  print('Generating plot of summary statistics based on day.')
+#  day_summary_df.plot()
+
   # Finally show the plots/charts.  Only call this at the end.
-  plt.show()
+#  plt.show()
 
   # To do a simple analysis, add the sleep data into the merged dataframe to see what type of sleep was occuring during the heartrate
