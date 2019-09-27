@@ -327,7 +327,8 @@ if __name__ == '__main__':
     frag_list = get_date_frag(options)
     file_list = list()
     missing_files = list()
-    prog_bar = tqdm(total=len(frag_list), desc='Creating file list')
+
+    prog_bar = tqdm(total=len(frag_list), desc='Creating file list', ascii=True)
     for frag in frag_list:
         if 'heartrate' in options['analyze_type']:
             f1 = options['output_dir'] + '/hr_intraday_' + str(frag) + '.csv'
@@ -377,7 +378,7 @@ if __name__ == '__main__':
     empty_file_list = list()
     all_zeros_file_list = list()
 
-    prog_bar = tqdm(total=len(file_list), desc='Merging Files')
+    prog_bar = tqdm(total=len(file_list), desc='Merging Files', ascii=True)
     for fname in file_list:
         df = get_dataframe(fname)
         # There is only one column in the fitbit dataframe, if the max and min are 0
@@ -397,18 +398,24 @@ if __name__ == '__main__':
         prog_bar.update()
 
     logging.warning('Number of files merged:' + str(len(merged_file_list)))
+    prog_bar = tqdm(total=len(merged_file_list), desc='Writing merged file list', ascii=True)
     for i in merged_file_list:
         logging.debug('Merged file: ' + i)
+        prog_bar.update()
 
     logging.warning('Number of empty files not merged:' +
                     str(len(empty_file_list)))
+    prog_bar = tqdm(total=len(empty_file_list), desc='Writing empty file list', ascii=True)
     for i in empty_file_list:
         logging.debug('Empty file, not merged: ' + i)
+        prog_bar.update()
 
     logging.warning('Number of files with all zeros:' +
                     str(len(all_zeros_file_list)))
+    prog_bar = tqdm(total=len(all_zeros_file_list), desc='Writing list of all zero files', ascii=True)
     for i in all_zeros_file_list:
         logging.debug('Zero filled file, not merged: ' + i)
+        prog_bar.update()
 
     # For simplicity, name the current index and then change the index to the SecondsIndex.
     merge_df.index.name = 'Timedelta'
