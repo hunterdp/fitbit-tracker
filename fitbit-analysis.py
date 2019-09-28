@@ -278,12 +278,10 @@ def get_date_frag(options):
 def create_index_file(fname, start, end, freq):
     """ Creates an dataframe with an time index and stores it in the passed filename """
     rng = pd.date_range(start=start, end=end, freq=freq)
-    base_df = pd.DataFrame({'Time': rng.strftime('%H:%M:%S')})
-    # Add a  simplier "index" by adding an extra column that is equal to the second
-    # count in 24 hours (aka: 0 - 86399 => seconds in a day).
-    base_df['SecondsIndex'] = [i for i in range(86400)]
-    base_df.to_csv(fname, columns=[
-                   'Time', 'SecondsIndex'], header=True, index=False)
+    base_df = pd.DataFrame(data={'Time': rng.strftime('%H:%M:%S')})
+    #base_df.to_csv(fname, columns=['Time'], header=True, index=False)
+    # Writes out the index as well
+    base_df.to_csv(fname, columns=['Time'], header=True, index=True)
 
 
 def interpolate_gaps(values, limit=None):
@@ -315,7 +313,6 @@ def generate_stats_df(df, axis):
     return stats_df
 
 
-##### MAIN PROG STARTS HERE #####
 if __name__ == '__main__':
 
     # Retrieve and valid command line options.
@@ -369,11 +366,19 @@ if __name__ == '__main__':
     # Generate an index that consists of HH:MM:SS and convert it to the timedelta index.
     # This is used to ensure that all possible index values in the day can be captured
     # as the FitBit second intervals can vary day to day.  This ensures that no time slots
-    # are dropped when merged.
+    # are not dropped when merged.
+    #
+    # Name the original index before setting the index to the timedelta.  The orginal index
+    # is simplier and is equal to the secondcount in 24 hours (aka: 0 - 86399 => per day).
+    # These will be swapped later on after the merge.
     create_index_file(index_file, start='00:00:00', end='23:59:59', freq='S')
-    merge_df = get_dataframe(index_file)
+    merge_df = pd.read_csv(index_file, sep=',', header=0, index_col=1,
+                     skip_blank_lines=True)
+    merge_df.columns=['Idx']
+    merge_df.index = pd.TimedeltaIndex(merge_df.index)
 
-    # Merge dataframes that have data.  A df that has all 0s is considered empty.
+    # Keep track of what has and has not been merged.
+    # A df that has all 0s is considered empty.
     merged_file_list = list()
     empty_file_list = list()
     all_zeros_file_list = list()
@@ -382,7 +387,7 @@ if __name__ == '__main__':
     for fname in file_list:
         df = get_dataframe(fname)
         # There is only one column in the fitbit dataframe, if the max and min are 0
-        # we consider the dataframe empty.
+        # consider the dataframe empty.
         for cols in df.columns:
             df_min = df[cols].min()
             df_max = df[cols].max()
@@ -417,14 +422,15 @@ if __name__ == '__main__':
         logging.debug('Zero filled file, not merged: ' + i)
         prog_bar.update()
 
-    # For simplicity, name the current index and then change the index to the SecondsIndex.
-    merge_df.index.name = 'Timedelta'
-    print(merge_df.describe())
-    merge_df.set_index('SecondsIndex')
-    print(merge_df.describe())
+    # To make indexing rows simplier, reset the index to a the second in the day vs timedelta value.  Note
+    # that the original timedelta value is kept.  Note that we do not lose the timedelta column
+    print('\nOriginal Merged Dataframe\n')
+    print(merge_df.head(50))
+    merge_df.plot()
+    merge_df.set_index('Idx', inplace=True, drop=False)
 
 #  print('Generating plot of merged dataframe.')
-#  merge_df.plot()
+    merge_df.plot()
 
     # TODO(dph): Make this an option in cases where we want just the sampled values.
     # For NaaN values, we will interpolate their values based on a linear algorithium.  While this
@@ -438,32 +444,32 @@ if __name__ == '__main__':
     # TODO(dph): Explore the use of the limit_area, limit and limit_direction arguments to see if
     #            what the differences are.
 
-    print('\nOriginal Merged Dataframe\n')
+    print('\nNew Index Merged Dataframe\n')
     print(merge_df.head(50))
-    time_summary_df = pd.DataFrame()
-    day_summary_df = pd.DataFrame()
-    time_summary_df = generate_stats_df(merge_df, 1)
-    day_summary_df  = generate_stats_df(merge_df, 0)
-    print('Time summary of original merged dataframe\n')
-    print('The total number of NaaN values is: ' + str(merge_df.isnull().sum().sum()))
-    print(time_summary_df)
-    print(day_summary_df)
-    columnList = list(merge_df.columns.values)
-    rowList = list(merge_df.index.values)
+    # time_summary_df = pd.DataFrame()
+    # day_summary_df = pd.DataFrame()
+    # time_summary_df = generate_stats_df(merge_df, 1)
+    # day_summary_df  = generate_stats_df(merge_df, 0)
+    # print('Time summary of original merged dataframe\n')
+    # print('The total number of NaaN values is: ' + str(merge_df.isnull().sum().sum()))
+    # print(time_summary_df)
+    # print(day_summary_df)
+    # columnList = list(merge_df.columns.values)
+    # rowList = list(merge_df.index.values)
     # print(rowList)
 
-    print('Time summary of interpolated merged dataframe\n')
-    interp_time_summary_df = pd.DataFrame()
-    interp_day_summary_df = pd.DataFrame()
-    interp_merge_df = merge_df.copy(deep=True)
-    interp_merge_df.interpolate(method='linear', axis=0, inplace=True, limit_direction='both')
-    print('\nOriginal Interpolated Dataframe\n')
-    print(interp_merge_df.head(50))
-    interp_time_summary_df = generate_stats_df(interp_merge_df, 1)
-    interp_day_summary_df  = generate_stats_df(interp_merge_df, 0)
-    print('The total number of NaaN values is: ' + str(interp_merge_df.isnull().sum().sum()))
-    print(interp_time_summary_df)
-    print(interp_day_summary_df)
+    # print('Time summary of interpolated merged dataframe\n')
+    # interp_time_summary_df = pd.DataFrame()
+    # interp_day_summary_df = pd.DataFrame()
+    # interp_merge_df = merge_df.copy(deep=True)
+    # interp_merge_df.interpolate(method='linear', axis=0, inplace=True, limit_direction='both')
+    # print('\nOriginal Interpolated Dataframe\n')
+    # print(interp_merge_df.head(50))
+    # interp_time_summary_df = generate_stats_df(interp_merge_df, 1)
+    # interp_day_summary_df  = generate_stats_df(interp_merge_df, 0)
+    # print('The total number of NaaN values is: ' + str(interp_merge_df.isnull().sum().sum()))
+    # print(interp_time_summary_df)
+    # print(interp_day_summary_df)
 
 # Examine the difference between the interpolated and original
 
@@ -473,7 +479,7 @@ if __name__ == '__main__':
 #  print('Generating plot of summary statistics based on day.')
 #  day_summary_df.plot()
 
-# Finally show the plots/charts.  Only call this at the end.
-#  plt.show()
+# Finally show the plots/charts.  Only call this at the end
+    plt.show()
 
 # To do a simple analysis, add the sleep data into the merged dataframe to see what type of sleep was occuring during the heartrate
