@@ -28,6 +28,7 @@ import pandas as pandas
 import logging
 import logging.handlers
 import io
+from tqdm import tqdm
 
 from os import path
 from datetime import datetime
@@ -379,33 +380,29 @@ if __name__ == '__main__':
 
     # Iterrate through the days.  If we just have a single date, start there
     # and use the date specified.
-    print('number_of_days_requested = ' + str(number_of_days_requested_int))
-    for d in range(0, number_of_days_requested_int):
+    for d in tqdm(range(0, number_of_days_requested_int), desc='Retrieving data', ascii=True):
         start_date_str = str(start_date.strftime('%Y-%m-%d'))
         start_date = start_date + timedelta(days=1)
 
         try:
-            print('Collecting data for: ' + start_date_str)
+            # print('Collecting data for: ' + start_date_str)
             if 'heartrate' in options['collect_type'] or 'all' in options['collect_type']:
                 heartrate_file = options['output_dir'] + \
                     '\\' + 'hr_intraday_' + start_date_str + '.csv'
                 heartrate_df = get_heartrate(oauth_client=authd_client2,
                                              start_date=start_date_str, time_interval='1sec', results_file=heartrate_file)
-                # print(heartrate_df.describe())
 
             if 'steps' in options['collect_type'] or 'all' in options['collect_type']:
                 steps_file = options['output_dir'] + '\\' + \
                     'steps_intraday_' + start_date_str + '.csv'
                 steps_df = get_steps(oauth_client=authd_client2, start_date=start_date_str,
                                      time_interval='15min', results_file=steps_file)
-#                print(steps_df.describe())
 
             if 'sleep' in options['collect_type'] or 'all' in options['collect_type']:
                 sleep_file = options['output_dir'] + '\\' + \
                     'sleep_day_' + start_date_str + '.csv'
                 sleep_df = get_sleep(oauth_client=authd_client2, start_date=start_date,
                                      results_file=sleep_file)
-                print(sleep_df.describe())
 
         # Try and recover from exceptions and if not, gracefully report and exit.
         except fitbit.exceptions.HTTPBadRequest:
