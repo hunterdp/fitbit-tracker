@@ -32,6 +32,7 @@ a series of data insights, graphs, charts and/or tables.
 #            with regards to statistics
 # TODO(dph): Add progess notification to the user.  This helps with large data sets.
 # TODO(dph): Add a DEBUG or INFO function that will only execute debug and info msgs
+
 from datetime import timedelta
 from datetime import date
 from datetime import datetime
@@ -65,7 +66,7 @@ __AUTHOR__ = 'David Hunter'
 __VERSION__ = 'beta-0.9'
 __LOG_NAME__ = 'fitbit-analysis.log'
 __TITLE__ = 'fitebit-analysis.py'
-
+__DEBUG__ = False
 
 def set_command_options():
     """ Defines command line arguments."""
@@ -75,13 +76,16 @@ def set_command_options():
     type_group = parser.add_mutually_exclusive_group(required=True)
     date_group = parser.add_mutually_exclusive_group(required=True)
     parser.add_argument('--log', '--log_level',
-                        help='Set the logging level [debug info warn error] (default: %(default)s)', action='store', dest='log_level', type=str, default='info')
+                        help='Set the logging level [debug info warn error] (default: %(default)s)',
+                        action='store', dest='log_level', type=str, default='info')
     parser.add_argument('-l', '--log_file', help='Set the logfile name. (default: %(default)s)',
                         action='store', type=str, default='fitbit-tracker.log')
     parser.add_argument('-o', '--output',  help='Output directory to store results files. (default: %(default)s)',
                         action='store', type=str,  dest='output_dir', default='results')
     parser.add_argument('-v', '--version', help='Prints the version',
                         action='version', version=__VERSION__)
+    parser.add_argument('-r', '--retain_files',  help='Save consolidate dataframes',
+                        dest='retain_dfs', type=bool)
     parser.add_argument('-e', '--end_date',  help='End date to analyze data from (yyyy-mm-dd)',
                         action='store', type=str,  dest='end_date')
     msg = 'Set the types of statistics to calculate for the collected data.  The options are all, min, middle or max.'
@@ -104,6 +108,7 @@ def set_command_options():
 
 def get_command_options(parser):
     """ Retrieves the command line options and returns a kv dict """
+    global __DEBUG__
     args = parser.parse_args()
     fmt = "%(asctime)-15s %(levelname)-8s %(lineno)5d:%(module)s:%(funcName)-25s %(message)s"
     log_file = args.log_file
@@ -120,13 +125,16 @@ def get_command_options(parser):
             logging.debug(line_sep)
             logging.debug(msg)
             logging.debug(line_sep)
+            options['log_level'] = 'debug'
+            __DEBUG__ = True
 
         elif 'warn' in args.log_level:
             logging.basicConfig(filename=args.log_file,
                                 format=fmt, level=logging.WARNING)
-            logging.warn(line_sep)
-            logging.warn(msg)
-            logging.warn(line_sep)
+            logging.warning(line_sep)
+            logging.warning(msg)
+            logging.warning(line_sep)
+            options['log_level'] = 'warn'
 
         elif 'error' in args.log_level:
             logging.basicConfig(filename=args.log_file,
@@ -134,12 +142,16 @@ def get_command_options(parser):
             logging.error(line_sep)
             logging.error(msg)
             logging.error(line_sep)
+            options['log_level'] = 'error'
+
         elif 'info' in args.log_level:
             logging.basicConfig(filename=args.log_file,
                                 format=fmt, level=logging.INFO)
             logging.info(line_sep)
             logging.info(msg)
             logging.info(line_sep)
+            options['log_level'] = 'info'
+
         else:
             logging.basicConfig(filename=args.log_file,
                                 format=fmt, level=logging.INFO)
@@ -228,6 +240,11 @@ def get_command_options(parser):
         msg = 'Do not use interpolation.'
         logging.info(msg)
 
+    if args.retain_dfs:
+        options['retain'] = True
+    else:
+        options['retain'] = False
+
     logging.debug(json.dumps(options))
     return(options)
 
@@ -286,21 +303,19 @@ def get_date_frag(options):
 
     elif 'number_of_days' in options:
         # Use the --days option
+        number_of_days_requested = 1
         today = datetime.today()
         # TODO(dph): The line below throws the "FutureWarning: Addition/subtraction of
         # integers and integer-arrays to DatetimeArray is deprecated, will be removed
         # in a future version.  Instead of adding/subtracting `n`, use `n * self.freq`
         start_date = today - timedelta(days=options['number_of_days'])
-        start_date_str = datetime.strftime(start_date, "%Y-%m-%d")
-        number_of_days_requested = 1
         logging.info('Collect data for: ' + str(start_date))
         date_list = date_range(start_date, start_date)
 
     elif 'date_to_collect' in options:
-        start_date = datetime.strptime(options['date_to_collect'], '%Y-%m-%d')
-        start_date_str = options['date_to_collect']
-        logging.info('Collect for the specific date:' + start_date_str)
         number_of_days_requested = 1
+        start_date = datetime.strptime(options['date_to_collect'], '%Y-%m-%d')
+        logging.info('Collect for the specific date:' + options['date_to_collect'])
         date_list = date_range(start_date, start_date)
     else:
         logging.error('No date specified.  Exiting')
@@ -321,22 +336,6 @@ def create_index_file(fname, start, end, freq):
     base_df.to_csv(fname, columns=['Time'], header=True, index=False)
 
 
-def interpolate_gaps(values, limit=None):
-    """ Fill gaps using linear interpolation, optionally only fill gaps up to a
-    size of `limit`.
-    """
-    values = np.asarray(values)
-    i = np.arange(values.size)
-    valid = np.isfinite(values)
-    filled = np.interp(i, i[valid], values[valid])
-    if limit is not None:
-        invalid = ~valid
-        for n in range(1, limit+1):
-            invalid[:-n] &= invalid[n:]
-        filled[invalid] = np.nan
-    return filled
-
-
 def generate_stats_df(df, axis):
     """ Given a dataframe, return a dataframe with stats along the given axis"""
     stats_df = pd.DataFrame()
@@ -347,25 +346,40 @@ def generate_stats_df(df, axis):
     stats_df['MinIdx'] = df.idxmin(axis=axis)
     stats_df['MaxIdx'] = df.idxmax(axis=axis)
     stats_df['StdDev'] = df.std(axis=axis)
-
     return stats_df
+
 
 def get_sum_of_axis(df, axis):
     """ Returns a series of the summary of the given axis """
-    series = df.sum(axis=axis, skipna=True)
+    sum = df.sum(axis=axis, skipna=True)
     return(sum)
 
-if __name__ == '__main__':
 
-    # Retrieve and valididate command line options.
+def log_debug_list(_list, prog_msg, log_msg):
+    """ Given a list, log it to the debug log file """
+    logging.debug(log_msg)
+    prog_bar = tqdm(total=len(_list), desc=prog_msg, ascii=True)
+    for i in _list:
+        logging.debug('\t' + i)
+        prog_bar.update()
+
+
+if __name__ == '__main__':
     parser = set_command_options()
     options = get_command_options(parser)
     index_file = options['output_dir'] + '/intraday_index.csv'
+    found_file_list = list()
+    missing_file_list = list()
 
-    # Generate the list of files to retrieve, keeping track of missing ones.
+    # Create an index file that contains all timeslots in a day as the FitBit
+    # sampling intervals can vary day to day.
+    create_index_file(index_file, start='00:00:00', end='23:59:59', freq='S')
+    merge_df = get_dataframe(index_file)
+    merge_df.index = pd.TimedeltaIndex(merge_df.index)
+
+    # Generate a list of all possible filenames during the requested time
+    # period and create a list of valid files.
     frag_list = get_date_frag(options)
-    file_list = list()
-    missing_files = list()
     prog_bar = tqdm(total=len(frag_list), desc='Creating file list', ascii=True)
     for frag in frag_list:
         if 'heartrate' in options['analyze_type']:
@@ -373,51 +387,34 @@ if __name__ == '__main__':
         elif 'steps' in options['analyze_type']:
             f1 = options['output_dir'] + \
                 '/steps_intraday_' + str(frag) + '.csv'
-        elif 'sleep' in options['analyze_dir']:
+        elif 'sleep' in options['analyze_type']:
             f1 = options['output_dir'] + '/sleep_day_' + str(frag) + '.csv'
         if os.path.exists(f1):
-            file_list.append(f1)
+            found_file_list.append(f1)
         else:
-            missing_files.append(f1)
+            missing_file_list.append(f1)
         prog_bar.update()
+    logging.info('Looked for ' +str(len(frag_list)) + ' files.')
+    logging.info('Found ' + str(len(found_file_list)) + ' files.')
+    logging.info('Missing  ' + str(len(missing_file_list)) + ' files.')
 
-    # If no files match, just report and exit.
-    if len(file_list) == 0:
+    if __DEBUG__:
+        log_debug_list(frag_list,'Writing found fragment list','Fragment Files:')
+        log_debug_list(found_file_list,'Writing found file list','Found Files:')
+        log_debug_list(missing_file_list, 'Writing missing file list','Missing Files:')
+
+    if len(found_file_list) == 0:
         msg = 'No matching files find for request.'
         print(msg)
         logging.error(msg)
         exit(-1)
-    logging.info('Looked for ' +str(len(frag_list)) + ' files.')
-    logging.info('Found ' + str(len(file_list)) + ' files.')
-    if len(file_list) != len(frag_list):
-        prog_bar = tqdm(total=len(frag_list), desc='Writing found file list', ascii=True)
-        for i in file_list:
-            msg = '\t' + i
-            logging.debug(msg)
-            prog_bar.update()
-        prog_bar = tqdm(total=len(frag_list), desc='Writing missing file list', ascii=True)
-        logging.info('Number of missing files is: ' +
-                 str(len(missing_files)))
-        for f in missing_files:
-            msg = '\t' + f
-            logging.debug(msg)
-            prog_bar.update()
 
-    # Ensure that no time slots are not dropped when files are merged
-    # This allows all possible index values in the day as the FitBit
-    # sampling  intervals can vary day to day.
-    create_index_file(index_file, start='00:00:00', end='23:59:59', freq='S')
-    merge_df = get_dataframe(index_file)
-    #merge_df.index = pd.TimedeltaIndex(merge_df.index)
-
-    # Merge the files into a single dataframe, keeping
-    # track of what has and has not been merged.
+    # Merge the files into a single dataframe, keeping track of what has/has not merged.
     merged_file_list = list()
     empty_file_list = list()
     all_zeros_file_list = list()
-
-    prog_bar = tqdm(total=len(file_list), desc='Merging Files', ascii=True)
-    for fname in file_list:
+    prog_bar = tqdm(total=len(found_file_list), desc='Merging Files', ascii=True)
+    for fname in found_file_list:
         df = get_dataframe(fname)
         # if the max and min are 0 consider the dataframe empty.
         for cols in df.columns:
@@ -432,25 +429,14 @@ if __name__ == '__main__':
                                 right_index=True, how='left')
             merged_file_list.append(fname)
         prog_bar.update()
-
-    # If required, write out the file lists.
-    prog_bar = tqdm(total=len(merged_file_list), desc='Writing merged file list', ascii=True)
     logging.info('Merged ' + str(len(merged_file_list)) + ' files.')
-    for i in merged_file_list:
-        logging.debug('\t' + i)
-        prog_bar.update()
-
-    prog_bar = tqdm(total=len(empty_file_list), desc='Writing empty file list', ascii=True)
     logging.info(str(len(empty_file_list)) + ' files not merged:')
-    for i in empty_file_list:
-        logging.debug('\t' + i)
-        prog_bar.update()
-
-    prog_bar = tqdm(total=len(all_zeros_file_list), desc='Writing list of all zero files', ascii=True)
     logging.info(str(len(all_zeros_file_list)) + ' files with all zeros.')
-    for i in all_zeros_file_list:
-        logging.debug('\t' + i)
-        prog_bar.update()
+
+    if __DEBUG__:
+        log_debug_list(merged_file_list,'Writing merged file list','Merged Files: ')
+        log_debug_list(empty_file_list, 'Writing empty file list', 'Empty Files: ')
+        log_debug_list(all_zeros_file_list, 'Writing list of all zero files','Files with all zeros: ')
 
     if options['interpolate']:
         # Within the heartrate dataframe, NaaN values  will be interpolated  values based on
@@ -462,70 +448,37 @@ if __name__ == '__main__':
         # value is relatively constant across time.
         # TODO(dph): Explore the use of the limit_area, limit and limit_direction arguments to see if
         #            what the differences are.
-        print('The total number of NaaN values before is: ' + str(merge_df.isnull().sum().sum()))
-        print('Interpolating the merged dataframe values.')
+        logging.info('Interpolating the merged dataframe values.')
         merge_df.interpolate(method='linear', axis=0, inplace=True, limit_direction='both')
-        print('The total number of NaaN values after is: ' + str(merge_df.isnull().sum().sum()))
 
-    # Create a summary dataframe for both the time and day axes
+    # if 'sleep' in options[anlyze_type]:
+        # Fill any non-recorded time with 0, indicating awake except for the time
+        # period when sleep started and ended.
+        # sleep_start =
+        # sleep_stop =
+
+    # Create a summary dataframes for both the time and day axes
     time_summary_df = pd.DataFrame()
     day_summary_df = pd.DataFrame()
+
     # TODO(dph): This throws the warning "RuntimeWarning: All-NaN slice encountered overwrite_input=overwrite_input)"
     print('Generating basic statistics along the columns axis.')
     time_summary_df = generate_stats_df(merge_df, 'columns')
     print('Generating basic statistics along the index axis.')
     day_summary_df  = generate_stats_df(merge_df, 'index')
 
-    # Total step count for each day and add it to the day dataframe
     if 'steps' in options['analyze_type']:
         day_summary_df['Total Steps'] = merge_df.sum(axis='index', skipna=True)
-        print(day_summary_df.sample().head())
-        #print(merge_df.sum(axis='columns'))
 
-    # print(time_summary_df)
-    # print(day_summary_df)
     column_name_list = list(merge_df.columns.values)
     index_names_list = list(merge_df.index.values)
-
-    print(index_names_list[1000])
-
-    #day_summary_df.index = pd.to_datetime(day_summary_df.index)
-    # time_summary_df.index = pd.to_datetime(time_summary_df.index)
-
-    # print('Generating plot of summary statistics based on time.')
-    # time_summary_df.plot(grid=True)
-    # print('Generating plot of summary statistics based on day.')
-    # day_summary_df.plot(grid=True)
-
-    # Create simple box charts
-    #time_summary_df.plot.box()
-    #day_summary_df.plot.box()
-
-    # Plot basic histograms charts of the summary dataframes
-    # time_summary_df.hist()
-    # day_summary_df.hist()
-
-    # Plot some simple scattergrams of some of the columns
-    #day_summary_df.plot(x='MinIdx', y='Min', c='DarkBlue')
-    #time_summary_df.plot.scatter(time_summary_df['MinIdx'], time_summary_df['MaxIdx'])
-
-    # Writeout the summary dataframes to htmlfiles
-    # day_summary_df.to_html('results/day_summary.html')
-    # time_summary_df.to_html('results/time_summary.html')
-
-    # Plot min time slots
-    # plt.plot(time_summary_df['Max'], time_summary_df['Min'], ',b', time_summary_df['MaxIdx'], time_summary_df['MinIdx'], ',r')
-
-    # Do deeper statistical analysis
-    # print('Calculating seasonality of the day statistics dataset.')
-    # Note:  All datesw must be accounted for in the time series for this function to work.
-    # decomposition = sm.tsa.seasonal_decompose(day_summary_df, model='addative')
-    # decomposition.plot()
-    # print('Calculating seasonality of the time statistics dataset.')
-    # decomposition = sm.tsa.seasonal_decompose(time_summary_df, model='addative')
-    # decomposition.plot()
-
-    # Finally show the plots/charts.  Only call this at the end
-    # plt.show()
+    merge_df.hist()
+    plt.show()
 
     # To do a simple analysis, add the sleep data into the merged dataframe to see what type of sleep was occuring during the heartrate
+
+    # Retain summary files if requested
+    if options['retain']:
+        merge_df.to_csv('merged_df.csv')
+        day_summary_df.to_csv('day_summary.csv')
+        time_summary_df.to_csv('time_summary.csv')
