@@ -34,6 +34,10 @@ day.  This will generate a directory of data files suitable for post processing.
 
 Once setup with an initial OAuth2 token and refresh token, new tokens will be
 retrieved and the configuration file will be updated.
+
+TODO(dph): SHift from storing in csv files to saving the entire JSON data strings.
+           This data can then be parsed easier and consolidated as needed in
+           later stages of processing.
 """
 
 # Imports
@@ -45,7 +49,7 @@ import os
 import os.path
 import sys
 import requests
-import pandas as pandas
+import pandas as pd
 import logging
 import logging.handlers
 import io
@@ -121,11 +125,15 @@ def set_command_options():
         action='store',
         type=str,
         dest='end_date')
-
+    parser.add_argument(
+        '-j',
+        '--json',
+        help='Save original JSON data.',
+        action='store_true')
     group.add_argument(
         '-a',
         '--all',
-        help='Collect all the data possible',
+        help='Collect all the data possible on a daly basis.',
         action='store_true')
     group.add_argument(
         '-t',
@@ -215,7 +223,7 @@ def get_command_options(parser):
 
     # Retrieve the data type(s) to collect.
     if args.all:
-        options['collect_type'] = 'steps heartrate sleep'
+        options['collect_type'] = 'daily'
     elif args.collect_type:
         options['collect_type'] = args.collect_type
         logging.info('Collecting information for: ' + args.collect_type)
@@ -289,9 +297,13 @@ def get_command_options(parser):
     else:
         options['output_dir'] = args.output_dir
 
+    if args.json:
+        options['json']=True
+    else:
+        options['json']=False
+
     logging.info(json.dumps(options))
     return (options)
-
 
 def refresh_new_token(token):
     """Called when the access token needs to be refreshed. """
@@ -328,12 +340,11 @@ def get_heartrate(oauth_client, start_date, time_interval, results_file):
     Args:
       oauth_client:  An OAuth2 client id.
       start_date:    Collect starting at this date
-      end_date:      Stope collecting at this date
       time_interval: Time ganualarity to collect. See fitbit documentation
       results_file:  The name of the file to store results in
 
     Returns:
-      A pandas dataframe with the time and values.
+      A dataframe with the time and values.
     """
     hr = oauth_client.intraday_time_series(
         resource='activities/heart',
@@ -345,23 +356,59 @@ def get_heartrate(oauth_client, start_date, time_interval, results_file):
 
     # Only save the data if there is any.
     if hr['activities-heart'][0]['value'] != 0:
-        t_list = []
-        v_list = []
+        sum_df = pd.DataFrame()
+        name_list = list()
+        max_list = list()
+        min_list = list()
+        minutes_list = list()
+        cal_list = list()
+        day = hr['activities-heart'][0]['dateTime']
+        for i in hr['activities-heart'][0]['heartRateZones']:
+            name_list.append(i['name'])
+            max_list.append(i['max'])
+            min_list.append(i['min'])
+            minutes_list.append(i['minutes'])
+            cal_list.append(i['caloriesOut'])
+
+        t_list = list()
+        v_list = list()
         for i in hr['activities-heart-intraday']['dataset']:
             v_list.append(i['value'])
             t_list.append(i['time'])
     else:
         logging.info("No heartrate data for " + str(start_date))
+    sum_df = pd.DataFrame({'Date' : day,
+                              'Name': name_list,
+                              'Min' : min_list,
+                              'Max' : max_list,
+                              'Minutes' : minutes_list,
+                              'Calories' : cal_list})
+    sum_df.to_csv(results_file.replace('.csv', '_summary.csv')
+                 ,header=True, index=False)
+    df = pd.DataFrame({'Time': t_list, start_date: v_list})
+    df.to_csv(results_file, columns=['Time', start_date],
+               header=True, index=False)
 
-    df = pandas.DataFrame({'Time': t_list, start_date: v_list})
-    df.to_csv(
-        results_file, columns=['Time', start_date], header=True, index=False)
-    return (df)
+    with open(results_file.replace('.csv', '.json'), 'w') as json_file:
+        json.dump(hr, json_file)
+
+    return df
 
 
 def get_steps(oauth_client, start_date, time_interval, results_file):
     """Retrieve the step count for the day at the specified interval, store
        data in a file and returns the data in a panda dataframe.
+
+    Args:
+      oauth_client:  An OAuth2 client id.
+      start_date:    Collect starting at this date
+      time_interval: Time ganualarity to collect. See fitbit documentation
+      results_file:  The name of the file to store results in
+
+    Returns:
+      A dataframe with the time and values.
+
+      NB: 2 files are stored each time.
     """
     steps = oauth_client.intraday_time_series(
         resource='activities/steps',
@@ -373,17 +420,28 @@ def get_steps(oauth_client, start_date, time_interval, results_file):
 
     # Only save the data if there is any.
     if steps['activities-steps'][0]['value'] != 0:
-        t_list = []
-        v_list = []
+        day = steps['activities-steps'][0]['dateTime']
+        step_total = steps['activities-steps'][0]['value']
+        t_list = list()
+        v_list = list()
         for i in steps['activities-steps-intraday']['dataset']:
             v_list.append(i['value'])
             t_list.append(i['time'])
     else:
         logging.info("No step data for " + str(start_date))
 
-    df = pandas.DataFrame({'Time': t_list, start_date: v_list})
+    sum_df = pd.DataFrame({'Date' : day, 'Total Steps' : step_total},
+                          index=[0])
+    sum_df.to_csv(results_file.replace('.csv', '_summary.csv')
+                 ,header=True, index=False)
+
+    df = pd.DataFrame({'Time': t_list, start_date: v_list})
     df.to_csv(
         results_file, columns=['Time', start_date], header=True, index=False)
+
+    with open(results_file.replace('.csv', '.json'), 'w') as json_file:
+        json.dump(steps, json_file)
+
     return (df)
 
 
@@ -396,11 +454,10 @@ def get_sleep(oauth_client, start_date, results_file):
     logging.debug(json.dumps(sleep, indent=2))
     t_list = list()
     v_list = list()
-
     # Only save the data if there is any.
     if sleep['summary']['totalMinutesAsleep'] != 0:
         # Account for days where there multiple sleep cycles.
-        num_cycles = len(sleep['sleep'])
+        num_cycles = sleep['summary']['totalSleepRecords']
         x = 0
         while (x < num_cycles):
             for i in sleep['sleep'][x]['minuteData']:
@@ -409,9 +466,14 @@ def get_sleep(oauth_client, start_date, results_file):
             x = x + 1
     else:
         logging.info("No sleep data for " + str(start_date))
-    df = pandas.DataFrame({'Time': t_list, start_date: v_list})
+
+    print('\n\n')
+    df = pd.DataFrame({'Time': t_list, start_date: v_list})
     df.to_csv(
         results_file, columns=['Time', start_date], header=True, index=False)
+
+    with open(results_file.replace('.csv', '.json'), 'w') as json_file:
+        json.dump(sleep, json_file)
     return (df)
 
 
@@ -512,7 +574,7 @@ if __name__ == '__main__':
 
         try:
             # print('Collecting data for: ' + start_date_str)
-            if 'heartrate' in options['collect_type'] or 'all' in options['collect_type']:
+            if 'heartrate' in options['collect_type']:
                 heartrate_file = options['output_dir'] + '\\' + 'hr_intraday_' + start_date_str + '.csv'
                 heartrate_df = get_heartrate(
                     oauth_client=authd_client2,
@@ -520,7 +582,7 @@ if __name__ == '__main__':
                     time_interval='1sec',
                     results_file=heartrate_file)
 
-            if 'steps' in options['collect_type'] or 'all' in options['collect_type']:
+            if 'steps' in options['collect_type']:
                 steps_file = options['output_dir'] + '\\' + 'steps_intraday_' + start_date_str + '.csv'
                 steps_df = get_steps(
                     oauth_client=authd_client2,
@@ -528,12 +590,15 @@ if __name__ == '__main__':
                     time_interval='1min',
                     results_file=steps_file)
 
-            if 'sleep' in options['collect_type'] or 'all' in options['collect_type']:
+            if 'sleep' in options['collect_type']:
                 sleep_file = options['output_dir'] + '\\' + 'sleep_day_' + start_date_str + '.csv'
                 sleep_df = get_sleep(
                     oauth_client=authd_client2,
                     start_date=start_date,
                     results_file=sleep_file)
+
+            if 'daily' in options['collect_type']:
+                print('Collect all daily metrics')
 
         # Try and recover from exceptions and if not, gracefully report and exit.
         except fitbit.exceptions.HTTPBadRequest:
