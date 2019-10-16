@@ -59,6 +59,7 @@ from os import path
 from datetime import datetime
 from datetime import date
 from datetime import timedelta
+from pandas.io.json import json_normalize
 
 # Globals
 __AUTHOR__ = 'David Hunter'
@@ -336,13 +337,11 @@ def is_valid_date(date_to_check):
 
 def get_heartrate(oauth_client, start_date, time_interval, results_file):
     """ Retrieve the intraday heartrate data and store to a file.
-
     Args:
       oauth_client:  An OAuth2 client id.
       start_date:    Collect starting at this date
       time_interval: Time ganualarity to collect. See fitbit documentation
       results_file:  The name of the file to store results in
-
     Returns:
       A dataframe with the time and values.
     """
@@ -354,60 +353,26 @@ def get_heartrate(oauth_client, start_date, time_interval, results_file):
         end_time='23:59')
     logging.debug(json.dumps(hr, indent=2))
 
-    # Only save the data if there is any.
     if hr['activities-heart'][0]['value'] != 0:
-        sum_df = pd.DataFrame()
-        name_list = list()
-        max_list = list()
-        min_list = list()
-        minutes_list = list()
-        cal_list = list()
-        day = hr['activities-heart'][0]['dateTime']
-        for i in hr['activities-heart'][0]['heartRateZones']:
-            name_list.append(i['name'])
-            max_list.append(i['max'])
-            min_list.append(i['min'])
-            minutes_list.append(i['minutes'])
-            cal_list.append(i['caloriesOut'])
-
-        t_list = list()
-        v_list = list()
-        for i in hr['activities-heart-intraday']['dataset']:
-            v_list.append(i['value'])
-            t_list.append(i['time'])
+        df = json_normalize(hr['activities-heart-intraday'], record_path=['dataset'], sep='_')
     else:
         logging.info("No heartrate data for " + str(start_date))
-    sum_df = pd.DataFrame({'Date' : day,
-                              'Name': name_list,
-                              'Min' : min_list,
-                              'Max' : max_list,
-                              'Minutes' : minutes_list,
-                              'Calories' : cal_list})
-    sum_df.to_csv(results_file.replace('.csv', '_summary.csv')
-                 ,header=True, index=False)
-    df = pd.DataFrame({'Time': t_list, start_date: v_list})
-    df.to_csv(results_file, columns=['Time', start_date],
-               header=True, index=False)
 
+    df.to_csv(results_file, header=True, index=False)
     with open(results_file.replace('.csv', '.json'), 'w') as json_file:
         json.dump(hr, json_file)
-
     return df
-
 
 def get_steps(oauth_client, start_date, time_interval, results_file):
     """Retrieve the step count for the day at the specified interval, store
        data in a file and returns the data in a panda dataframe.
-
     Args:
       oauth_client:  An OAuth2 client id.
       start_date:    Collect starting at this date
       time_interval: Time ganualarity to collect. See fitbit documentation
       results_file:  The name of the file to store results in
-
     Returns:
       A dataframe with the time and values.
-
       NB: 2 files are stored each time.
     """
     steps = oauth_client.intraday_time_series(
@@ -418,64 +383,42 @@ def get_steps(oauth_client, start_date, time_interval, results_file):
         detail_level=time_interval)
     logging.debug(json.dumps(steps, indent=2))
 
-    # Only save the data if there is any.
     if steps['activities-steps'][0]['value'] != 0:
-        day = steps['activities-steps'][0]['dateTime']
-        step_total = steps['activities-steps'][0]['value']
-        t_list = list()
-        v_list = list()
-        for i in steps['activities-steps-intraday']['dataset']:
-            v_list.append(i['value'])
-            t_list.append(i['time'])
+        df = json_normalize(steps['activities-steps-intraday'], record_path=['dataset'], sep='_')
     else:
         logging.info("No step data for " + str(start_date))
 
-    sum_df = pd.DataFrame({'Date' : day, 'Total Steps' : step_total},
-                          index=[0])
-    sum_df.to_csv(results_file.replace('.csv', '_summary.csv')
-                 ,header=True, index=False)
-
-    df = pd.DataFrame({'Time': t_list, start_date: v_list})
-    df.to_csv(
-        results_file, columns=['Time', start_date], header=True, index=False)
-
+    df.to_csv(results_file, header=True, index=False)
     with open(results_file.replace('.csv', '.json'), 'w') as json_file:
         json.dump(steps, json_file)
-
     return (df)
 
-
 def get_sleep(oauth_client, start_date, results_file):
-    "Retrieve the sleep data for the day, store in datafile and return the dataframe."
+    """ Retrieve the sleep data for the day, store in datafile and return the dataframe.
+    Args:
+      oauth_client:  An OAuth2 client id.
+      start_date:    Collect starting at this date
+      time_interval: Time ganualarity to collect. See fitbit documentation
+      results_file:  The name of the file to store results in
+    Returns:
+      A dataframe with the time and values.
+      NB: 2 files are stored each time.
+    """
     # Retrieve the sleep data.  We need to translate the "value" if sleep into the different categories so
     # it can be aligned with the heartbeat data.  Maping for the values are:
     # 1=Asleep, 2=restless, 3=awake [NB: This is for fitbit api v1 only]
     sleep = authd_client2.get_sleep(start_date)
     logging.debug(json.dumps(sleep, indent=2))
-    t_list = list()
-    v_list = list()
-    # Only save the data if there is any.
+
     if sleep['summary']['totalMinutesAsleep'] != 0:
-        # Account for days where there multiple sleep cycles.
-        num_cycles = sleep['summary']['totalSleepRecords']
-        x = 0
-        while (x < num_cycles):
-            for i in sleep['sleep'][x]['minuteData']:
-                v_list.append(i['value'])
-                t_list.append(i['dateTime'])
-            x = x + 1
+        df = json_normalize(sleep['sleep'], record_path=['minuteData'], sep='_')
     else:
         logging.info("No sleep data for " + str(start_date))
 
-    print('\n\n')
-    df = pd.DataFrame({'Time': t_list, start_date: v_list})
-    df.to_csv(
-        results_file, columns=['Time', start_date], header=True, index=False)
-
+    df.to_csv(results_file, header=True, index=False)
     with open(results_file.replace('.csv', '.json'), 'w') as json_file:
         json.dump(sleep, json_file)
     return (df)
-
 
 if __name__ == '__main__':
     parser = set_command_options()
