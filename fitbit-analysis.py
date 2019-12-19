@@ -83,8 +83,7 @@ def set_command_options():
     parser.add_argument(
         '--log',
         '--log_level',
-        help=
-        'Set the logging level [debug info warn error] (default: %(default)s)',
+        help='Set the logging level [debug info warn error] (default: %(default)s)',
         action='store',
         dest='log_level',
         type=str,
@@ -115,7 +114,7 @@ def set_command_options():
         '--retain_files',
         help='Save consolidate dataframes',
         action='store_true'
-        )
+    )
     parser.add_argument(
         '-ps',
         '--plot_stats',
@@ -239,7 +238,7 @@ def get_command_options(parser):
 
     # What is the time period
     if ((args.number_of_days and (args.start_date or args.end_date)) or
-        (args.date_to_collect and (args.start_date or args.end_date))):
+            (args.date_to_collect and (args.start_date or args.end_date))):
         logging.error('Illegal date specifications.  Exiting')
         sys.exit(1)
     elif args.number_of_days:
@@ -462,13 +461,15 @@ if __name__ == '__main__':
     # Generate a list of all possible filenames during the requested time
     # period and create a list of valid files.
     frag_list = get_date_frag(options)
-    prog_bar = tqdm(total=len(frag_list), desc='Creating file list based on days', ascii=True)
+    prog_bar = tqdm(total=len(frag_list),
+                    desc='Creating file list based on days', ascii=True)
     for frag in frag_list:
         if 'heartrate' in options['analyze_type']:
             f1 = options['output_dir'] + '/hr_intraday_' + str(frag) + '.csv'
 
         elif 'steps' in options['analyze_type']:
-            f1 = options['output_dir'] + '/steps_intraday_' + str(frag) + '.csv'
+            f1 = options['output_dir'] + \
+                '/steps_intraday_' + str(frag) + '.csv'
 
         elif 'sleep' in options['analyze_type']:
             f1 = options['output_dir'] + '/sleep_day_' + str(frag) + '.csv'
@@ -476,7 +477,7 @@ if __name__ == '__main__':
         if os.path.exists(f1):
             found_file_list.append(f1)
         else:
-                missing_file_list.append(f1)
+            missing_file_list.append(f1)
         prog_bar.update()
 
     logging.info('Looked for ' + str(len(frag_list)) + ' files.')
@@ -563,7 +564,7 @@ if __name__ == '__main__':
     if 'steps' in options['analyze_type']:
         day_summary_df['Total Steps'] = merge_df.sum(axis='index', skipna=True)
 
-    #if 'sleep' in options['analyze_type']:
+    # if 'sleep' in options['analyze_type']:
         # Switch 0,1,2,3 for stages of sleep
 
     if options['plot_stats']:
@@ -595,16 +596,31 @@ if __name__ == '__main__':
             ax.plot(x, min_y, 'b-', label='Min Heartrate')
             ax.plot(x, max_y, 'r-', label='Max Heartrate')
             ax.plot(x, median_y, 'g-', label='Median Heartrate')
+            day_summary_df.plot()
 
         elif 'steps' in options['analyze_type']:
             ax.set_xlabel('Date', labelpad=20, fontsize=14, color='blue')
             ax.set_ylabel('Steps', labelpad=20, fontsize=14, color='blue')
             min_y = day_summary_df['Total Steps']
             x = day_summary_df.index
-            ax.bar(x, min_y, color='grey', orientation='vertical', label='Total Steps')
+            ax.bar(x, min_y, color='grey',
+                   orientation='vertical', label='Total Steps')
+
+        elif 'sleep' in options['analyze_type']:
+            ax.set_xlabel('Date', labelpad=20, fontsize=14, color='blue')
+            ax.set_ylabel('Sleep Stage', labelpad=20, fontsize=14, color='blue')
+            min_y = day_summary_df['Mean']
+            x = day_summary_df.index
+            ax.bar(x, min_y, color='grey',
+                   orientation='vertical', label='Sleep Stage')
         # Finally show the plots/charts.  Only call this at the end
         ax.legend(loc='upper center', frameon=True, ncol=3, fancybox=True)
         plt.show()
+    else:
+        # Just print out a sample of the statistics dataframe
+        print(day_summary_df)
+        print('\n\n')
+        print(time_summary_df)
 
     # Do deeper statistical analysis
     # print('Calculating seasonality of the day statistics dataset.')
@@ -614,7 +630,6 @@ if __name__ == '__main__':
     # print('Calculating seasonality of the time statistics dataset.')
     # decomposition = sm.tsa.seasonal_decompose(time_summary_df, model='addative')
     # decomposition.plot()
-
 
     # To do a simple analysis, add the sleep data into the merged dataframe to see what type of sleep was occuring during the heartrate
 
