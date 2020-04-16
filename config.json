@@ -4,10 +4,10 @@
     "auth2_url":"https://fitbit.com/oauth2/authorize",
     "client_id":"<enter your client id>",
     "client_secret":"<enter your client secret>",
-    "redirect_url":"https://www.312woodland.ddns.net/fitbit_callback.html",
+    "redirect_url":"https://<your.domain>/fitbit_callback.html",
     "auth_scopes":"activity, profile, weight, heatrate, settings, sleep",
     "token_expires":"31536000",
-    "email_addr":"youremail.yourdomain.com",
+    "email_addr":"youremail@yourdomain.com",
     "access_token": "<get from oauth page>",
     "refresh_token": "<get from oauth page>"
 }
