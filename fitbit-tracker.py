@@ -21,24 +21,24 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-"""Simple retrieving of fitbit information.
-
-A simple module to collect fitbit information, parse it and store it in csv files.
-The configuration infomration is read from the .json file passed in and must be submitted.
-There are various command line options that allow the collectin of a specified day in
-relation to the current day.  By default the program will collect data from yesterday
-and store it accordinly.
-
-To collect data over long periods of time, put this into a script and call it once a
-day.  This will generate a directory of data files suitable for post processing.
-
-Once setup with an initial OAuth2 token and refresh token, new tokens will be
-retrieved and the configuration file will be updated.
-
-TODO(dph): SHift from storing in csv files to saving the entire JSON data strings.
-           This data can then be parsed easier and consolidated as needed in
-           later stages of processing.
-"""
+#"""Simple retrieving of fitbit information.
+#
+#A simple module to collect fitbit information, parse it and store it in csv files.
+#The configuration infomration is read from the .json file passed in and must be submitted.
+#There are various command line options that allow the collectin of a specified day in
+#relation to the current day.  By default the program will collect data from yesterday
+#and store it accordinly.
+#
+#To collect data over long periods of time, put this into a script and call it once a
+#day.  This will generate a directory of data files suitable for post processing.
+#
+#Once setup with an initial OAuth2 token and refresh token, new tokens will be
+#retrieved and the configuration file will be updated.
+#
+#TODO(dph): SHift from storing in csv files to saving the entire JSON data strings.
+#           This data can then be parsed easier and consolidated as needed in
+#           later stages of processing.
+#"""
 
 # Imports
 import fitbit
@@ -59,7 +59,6 @@ from os import path
 from datetime import datetime
 from datetime import date
 from datetime import timedelta
-from pandas.io.json import json_normalize
 
 # Globals
 __AUTHOR__ = 'David Hunter'
@@ -354,7 +353,7 @@ def get_heartrate(oauth_client, start_date, time_interval, results_file):
     logging.debug(json.dumps(hr, indent=2))
 
     if hr['activities-heart'][0]['value'] != 0:
-        df = json_normalize(hr['activities-heart-intraday'], record_path=['dataset'], sep='_')
+        df = pd.json_normalize(hr['activities-heart-intraday'], record_path=['dataset'], sep='_')
     else:
         logging.info("No heartrate data for " + str(start_date))
 
@@ -384,7 +383,7 @@ def get_steps(oauth_client, start_date, time_interval, results_file):
     logging.debug(json.dumps(steps, indent=2))
 
     if steps['activities-steps'][0]['value'] != 0:
-        df = json_normalize(steps['activities-steps-intraday'], record_path=['dataset'], sep='_')
+        df = pd.json_normalize(steps['activities-steps-intraday'], record_path=['dataset'], sep='_')
     else:
         logging.info("No step data for " + str(start_date))
 
@@ -411,7 +410,7 @@ def get_sleep(oauth_client, start_date, results_file):
     logging.debug(json.dumps(sleep, indent=2))
 
     if sleep['summary']['totalMinutesAsleep'] != 0:
-        df = json_normalize(sleep['sleep'], record_path=['minuteData'], sep='_')
+        df = pd.json_normalize(sleep['sleep'], record_path=['minuteData'], sep='_')
     else:
         logging.info("No sleep data for " + str(start_date))
 
@@ -518,7 +517,8 @@ if __name__ == '__main__':
         try:
             # print('Collecting data for: ' + start_date_str)
             if 'heartrate' in options['collect_type']:
-                heartrate_file = options['output_dir'] + '\\' + 'hr_intraday_' + start_date_str + '.csv'
+                tmp = 'hr_intraday_' + start_date_str + '.csv'
+                heartrate_file = os.path.join (options['output_dir'], tmp)
                 heartrate_df = get_heartrate(
                     oauth_client=authd_client2,
                     start_date=start_date_str,
@@ -526,7 +526,8 @@ if __name__ == '__main__':
                     results_file=heartrate_file)
 
             if 'steps' in options['collect_type']:
-                steps_file = options['output_dir'] + '\\' + 'steps_intraday_' + start_date_str + '.csv'
+                tmp = 'steps_intraday_' + start_date_str + '.csv'
+                steps_file = os.path.join(options['output_dir'], tmp)
                 steps_df = get_steps(
                     oauth_client=authd_client2,
                     start_date=start_date_str,
@@ -534,7 +535,8 @@ if __name__ == '__main__':
                     results_file=steps_file)
 
             if 'sleep' in options['collect_type']:
-                sleep_file = options['output_dir'] + '\\' + 'sleep_day_' + start_date_str + '.csv'
+                tmp = 'sleep_day_' + start_date_str + '.csv'
+                sleep_file = os.path.join(options['output_dir'], tmp)
                 sleep_df = get_sleep(
                     oauth_client=authd_client2,
                     start_date=start_date,

@@ -7,7 +7,7 @@ For the data analyutics tools, I used standard Python data science utilities.  E
 
 ## Requirements
 * Python version: 3 (It may work on 2.7+)
-* Python Package: numpy, pandas, matplotlib, seaborn, fitbit
+* Python Package: numpy, pandas, matplotlib, seaborn, fitbit, tqdm
 
 ## Setup
 1.  You need to create and register a fitbit application [here](https://dev.fitbit.com/apps/new).  Make sure that you select that this is a personal application.  If you do not, you will not be able to retrieve intraday data.
