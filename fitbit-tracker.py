@@ -323,7 +323,6 @@ def refresh_new_token(token):
     with open(CONFIG_FILE, 'w') as j_config_file:
         json.dump(data, j_config_file, indent=4)
 
-
 def is_valid_date(date_to_check):
     """ Checks to see if the date is valid """
     year, month, day = date_to_check.split('-', 3)
@@ -332,7 +331,6 @@ def is_valid_date(date_to_check):
     except ValueError:
         return (False)
     return (True)
-
 
 def get_heartrate(oauth_client, start_date, time_interval, results_file):
     """ Retrieve the intraday heartrate data and store to a file.
@@ -354,13 +352,14 @@ def get_heartrate(oauth_client, start_date, time_interval, results_file):
 
     if hr['activities-heart'][0]['value'] != 0:
         df = pd.json_normalize(hr['activities-heart-intraday'], record_path=['dataset'], sep='_')
+        df.to_csv(results_file, header=True, index=False)
+        with open(results_file.replace('.csv', '.json'), 'w') as json_file:
+            json.dump(hr, json_file)
+        return (df)
+
     else:
         logging.info("No heartrate data for " + str(start_date))
-
-    df.to_csv(results_file, header=True, index=False)
-    with open(results_file.replace('.csv', '.json'), 'w') as json_file:
-        json.dump(hr, json_file)
-    return df
+        return ()
 
 def get_steps(oauth_client, start_date, time_interval, results_file):
     """Retrieve the step count for the day at the specified interval, store
@@ -384,13 +383,14 @@ def get_steps(oauth_client, start_date, time_interval, results_file):
 
     if steps['activities-steps'][0]['value'] != 0:
         df = pd.json_normalize(steps['activities-steps-intraday'], record_path=['dataset'], sep='_')
+        df.to_csv(results_file, header=True, index=False)
+        with open(results_file.replace('.csv', '.json'), 'w') as json_file:
+            json.dump(steps, json_file)
+        return (df)
+
     else:
         logging.info("No step data for " + str(start_date))
-
-    df.to_csv(results_file, header=True, index=False)
-    with open(results_file.replace('.csv', '.json'), 'w') as json_file:
-        json.dump(steps, json_file)
-    return (df)
+        return ()
 
 def get_sleep(oauth_client, start_date, results_file):
     """ Retrieve the sleep data for the day, store in datafile and return the dataframe.
@@ -411,13 +411,13 @@ def get_sleep(oauth_client, start_date, results_file):
 
     if sleep['summary']['totalMinutesAsleep'] != 0:
         df = pd.json_normalize(sleep['sleep'], record_path=['minuteData'], sep='_')
+        df.to_csv(results_file, header=True, index=False)
+        with open(results_file.replace('.csv', '.json'), 'w') as json_file:
+          json.dump(sleep, json_file)
+        return (df)
     else:
         logging.info("No sleep data for " + str(start_date))
-
-    df.to_csv(results_file, header=True, index=False)
-    with open(results_file.replace('.csv', '.json'), 'w') as json_file:
-        json.dump(sleep, json_file)
-    return (df)
+        return()
 
 if __name__ == '__main__':
     parser = set_command_options()
@@ -519,28 +519,17 @@ if __name__ == '__main__':
             if 'heartrate' in options['collect_type']:
                 tmp = 'hr_intraday_' + start_date_str + '.csv'
                 heartrate_file = os.path.join (options['output_dir'], tmp)
-                heartrate_df = get_heartrate(
-                    oauth_client=authd_client2,
-                    start_date=start_date_str,
-                    time_interval='1sec',
-                    results_file=heartrate_file)
+                heartrate_df = get_heartrate(oauth_client=authd_client2, start_date=start_date_str, time_interval='1sec', results_file=heartrate_file)
 
             if 'steps' in options['collect_type']:
                 tmp = 'steps_intraday_' + start_date_str + '.csv'
                 steps_file = os.path.join(options['output_dir'], tmp)
-                steps_df = get_steps(
-                    oauth_client=authd_client2,
-                    start_date=start_date_str,
-                    time_interval='1min',
-                    results_file=steps_file)
+                steps_df = get_steps(oauth_client=authd_client2, start_date=start_date_str, time_interval='1min', results_file=steps_file)
 
             if 'sleep' in options['collect_type']:
                 tmp = 'sleep_day_' + start_date_str + '.csv'
                 sleep_file = os.path.join(options['output_dir'], tmp)
-                sleep_df = get_sleep(
-                    oauth_client=authd_client2,
-                    start_date=start_date,
-                    results_file=sleep_file)
+                sleep_df = get_sleep(oauth_client=authd_client2, start_date=start_date, results_file=sleep_file)
 
             if 'daily' in options['collect_type']:
                 print('Collect all daily metrics')
