@@ -1,19 +1,15 @@
 # /usr/bin/python3
 # -*- coding: utf-8 -*-
 # MIT License
-
 # Copyright (c) 2019 David Hunter
-
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
 # in the Software without restriction, including without limitation the rights
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
-
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -56,7 +52,7 @@ import json
 import pandas as pd
 import numpy as numpy
 import seaborn as sns
-import pandas_profiling
+# import pandas_profiling
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
 
@@ -372,6 +368,7 @@ def date_range(start, end):
 
 def get_date_frag(options):
     """ Returns a list of file fragment using the dates specified in the options array """
+
     if 'end_date' in options and 'start_date' in options:
         start_date = datetime.strptime(options['start_date'], '%Y-%m-%d')
         end_date = datetime.strptime(options['end_date'], '%Y-%m-%d')
@@ -408,14 +405,12 @@ def get_date_frag(options):
 
     return (date_frag_list)
 
-
 def create_index_file(fname, start, end, freq):
     """ Creates an dataframe with an time index and stores it in the passed filename """
     # TODO(dph): Look at changing this to a TimeDeltaIndex or a DatetimeIndex model
     rng = pd.date_range(start=start, end=end, freq=freq)
     base_df = pd.DataFrame(data={'Time': rng.strftime('%H:%M:%S')})
     base_df.to_csv(fname, columns=['Time'], header=True, index=False)
-
 
 def generate_stats_df(df, axis):
     """ Given a dataframe, return a dataframe with stats along the given axis"""
@@ -452,8 +447,10 @@ if __name__ == '__main__':
     found_file_list = list()
     missing_file_list = list()
 
-    # Create an index file that contains all timeslots in a day as the FitBit
-    # sampling intervals can vary day to day.
+    # Create an index file that contains all timeslots in a day as the FitBit sampling intervals can vary day to day.
+    # TODO(dph): Heart rate is saved every 5 seconds, but it can start on any second, so we need to account for all seconds.
+    # TODO(dph): Steps are saved every minute, so we should only create one for every minute 
+    # TODO(dph): Sleep is saved once per minute, but can start either on the top or bottom of the minute (aka: 00 or1)
     create_index_file(index_file, start='00:00:00', end='23:59:59', freq='S')
     merge_df = get_dataframe(index_file)
     merge_df.index = pd.TimedeltaIndex(merge_df.index)
@@ -468,8 +465,7 @@ if __name__ == '__main__':
             f1 = options['output_dir'] + '/hr_intraday_' + str(frag) + '.csv'
 
         elif 'steps' in options['analyze_type']:
-            f1 = options['output_dir'] + \
-                '/steps_intraday_' + str(frag) + '.csv'
+            f1 = options['output_dir'] + '/steps_intraday_' + str(frag) + '.csv'
 
         elif 'sleep' in options['analyze_type']:
             f1 = options['output_dir'] + '/sleep_day_' + str(frag) + '.csv'
@@ -502,8 +498,8 @@ if __name__ == '__main__':
     merged_file_list = list()
     empty_file_list = list()
     all_zeros_file_list = list()
-    prog_bar = tqdm(total=len(found_file_list),
-                    desc='Merging Files', ascii=True)
+
+    prog_bar = tqdm(total=len(found_file_list), desc='Merging Files', ascii=True)
     for fname in found_file_list:
         df = get_dataframe(fname)
         # if the max and min are 0 consider the dataframe empty.
@@ -515,11 +511,7 @@ if __name__ == '__main__':
         elif df_min == 0 and df_max == 0:
             all_zeros_file_list.append(fname)
         else:
-            merge_df = pd.merge(merge_df,
-                                df,
-                                left_index=True,
-                                right_index=True,
-                                how='left')
+            merge_df = pd.merge(merge_df, df, left_index=True, right_index=True, how='left')
             merged_file_list.append(fname)
         prog_bar.update()
 
@@ -552,17 +544,17 @@ if __name__ == '__main__':
 
     # TODO(dph): Turn this into an option --generate_stats
     # Create a summary dataframes for both the time and day axes
-    time_summary_df = pd.DataFrame()
-    day_summary_df = pd.DataFrame()
+    #time_summary_df = pd.DataFrame()
+    #day_summary_df = pd.DataFrame()
 
     # TODO(dph): This throws the warning "RuntimeWarning: All-NaN slice encountered overwrite_input=overwrite_input)"
     #            Only does this when there are NaaN values.
-    print('\nGenerating basic statistics along the columns axis.')
-    time_summary_df = generate_stats_df(merge_df, 'columns')
-    print('\nGenerating basic statistics along the index axis.')
-    day_summary_df = generate_stats_df(merge_df, 'index')
-    if 'steps' in options['analyze_type']:
-        day_summary_df['Total Steps'] = merge_df.sum(axis='index', skipna=True)
+    #print('\nGenerating basic statistics along the columns axis.')
+    #time_summary_df = generate_stats_df(merge_df, 'columns')
+    #print('\nGenerating basic statistics along the index axis.')
+    #day_summary_df = generate_stats_df(merge_df, 'index')
+    #if 'steps' in options['analyze_type']:
+    #    day_summary_df['Total Steps'] = merge_df.sum(axis='index', skipna=True)
 
     # if 'sleep' in options['analyze_type']:
         # Switch 0,1,2,3 for stages of sleep
@@ -616,15 +608,15 @@ if __name__ == '__main__':
         # Finally show the plots/charts.  Only call this at the end
         ax.legend(loc='upper center', frameon=True, ncol=3, fancybox=True)
         plt.show()
-    else:
+    #else:
         # Just print out a sample of the statistics dataframe
-        print(day_summary_df)
-        print('\n\n')
-        print(time_summary_df)
+        #print(day_summary_df)
+        #print('\n\n')
+        #print(time_summary_df)
 
     # Do deeper statistical analysis
     # print('Calculating seasonality of the day statistics dataset.')
-    # Note:  All datesw must be accounted for in the time series for this function to work.
+    # Note:  All dates must be accounted for in the time series for this function to work.
     # decomposition = sm.tsa.seasonal_decompose(day_summary_df, model='addative')
     # decomposition.plot()
     # print('Calculating seasonality of the time statistics dataset.')
@@ -640,13 +632,13 @@ if __name__ == '__main__':
         logging.info(msg + 'merged')
         merge_df.to_csv('merged_df.csv')
 
-        print(msg + 'day summary dataframe.')
-        logging.info(msg + 'day summary dataframe.')
-        day_summary_df.to_csv('day_summary.csv')
+     #   print(msg + 'day summary dataframe.')
+     #   logging.info(msg + 'day summary dataframe.')
+     #   day_summary_df.to_csv('day_summary.csv')
 
-        print(msg + 'time summary dataframe.')
-        logging.info(msg + 'time summary dataframe.')
-        time_summary_df.to_csv('time_summary.csv')
+     #   print(msg + 'time summary dataframe.')
+     #   logging.info(msg + 'time summary dataframe.')
+     #   time_summary_df.to_csv('time_summary.csv')
 
         # Writeout the summary dataframes to htmlfiles
         # day_summary_df.to_html('results/day_summary.html')
