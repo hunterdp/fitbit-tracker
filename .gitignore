@@ -6,5 +6,7 @@
 *.fls
 *.fdb_latexmk
 *.csv
-.vscode
+*.vscode
+./data/*
 ./data/*.*
+*.code-workspace
