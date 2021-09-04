@@ -12,3 +12,6 @@
 ./data/*
 ./data/*.*
 *.code-workspace
+hr_*.json
+sleep_*.json
+steps_*.json
