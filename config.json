@@ -9,5 +9,8 @@
     "token_expires":"31536000",
     "email_addr":"youremail@yourdomain.com",
     "access_token": "<get from oauth page>",
-    "refresh_token": "<get from oauth page>"
+    "refresh_token": "<get from oauth page",
+    "db_name"; "fitbit",
+    "db_host"; "<http://influx.domain.com/",
+    "db_port"; "8086"
 }

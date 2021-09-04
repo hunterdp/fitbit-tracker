@@ -21,26 +21,24 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-#"""Simple retrieving of fitbit information.
+# Simple retrieving of fitbit information.
 #
-#A simple module to collect fitbit information, parse it and store it in csv files.
-#The configuration infomration is read from the .json file passed in and must be submitted.
-#There are various command line options that allow the collectin of a specified day in
-#relation to the current day.  By default the program will collect data from yesterday
-#and store it accordinly.
+# A simple module to collect fitbit information, parse it and store it in csv files.
+# The configuration infomration is read from the .json file passed in and must be submitted.
+# There are various command line options that allow the collectin of a specified day in
+# relation to the current day.  By default the program will collect data from yesterday
+# and store it accordinly.
 #
-#To collect data over long periods of time, put this into a script and call it once a
-#day.  This will generate a directory of data files suitable for post processing.
+# To collect data over long periods of time, put this into a script and call it once a
+# day.  This will generate a directory of data files suitable for post processing.
 #
-#Once setup with an initial OAuth2 token and refresh token, new tokens will be
-#retrieved and the configuration file will be updated.
+# Once setup with an initial OAuth2 token and refresh token, new tokens will be
+# retrieved and the configuration file will be updated.
 #
-#TODO(dph): SHift from storing in csv files to saving the entire JSON data strings.
-#           This data can then be parsed easier and consolidated as needed in
-#           later stages of processing.
-#"""
+# TODO(dph): Shift from storing in csv files to saving the entire JSON data strings.
+#            This data can then be parsed easier and consolidated as needed in
+#            later stages of processing.
 
-# Imports
 import fitbit
 import inspect
 import argparse
@@ -54,27 +52,20 @@ import logging
 import logging.handlers
 import io
 from tqdm import tqdm
-
 from os import path
 from datetime import datetime
 from datetime import date
 from datetime import timedelta
 
-# Globals
-__AUTHOR__ = 'David Hunter'
-__VERSION__ = 'fitbit-tracker ver 1-0'
-__LOG_NAME__ = 'fitbit-tracker.log'
-__TITLE__ = 'fitebit-tracker.py'
-__DEBUG__ = False
-
-# Set a global for the name of the configuration file.  This is used during the Oauth2 callback
-# routine when we need to refresh the tokens.
-CONFIG_FILE = ''
-
+global __AUTHOR__ = 'David Hunter'
+global __VERSION__ = 'fitbit-tracker ver 1-0'
+global __LOG_NAME__ = 'fitbit-tracker.log'
+global __TITLE__ = 'fitebit-tracker.py'
+global __DEBUG__ = False
+global CONFIG_FILE = ''
 
 def set_command_options():
     "Sets the command line arguments."
-    # Setup the valid arguments and then process.  Note we must have a configuration file.
     usage = 'Retrieves various information from the Fitbit website.'
     parser = argparse.ArgumentParser(
         prog='Fitbit Tracker',
@@ -89,17 +80,15 @@ def set_command_options():
         type=str,
         default='config.json')
     parser.add_argument(
-        '--log',
         '--log_level',
         dest='log_level',
-        help=
-        'Set the logging level [debug info warning error] (default: %(default)s)',
+        help='Set the logging level [debug info warning error] (default: %(default)s)',
         action='store',
         type=str,
         default='info')
     parser.add_argument(
         '-l',
-        '--log_file',
+        '--log',
         help='Set the logfile name. (default: %(default)s)',
         action='store',
         type=str,
@@ -170,7 +159,6 @@ def set_command_options():
 def get_command_options(parser):
     """ Retrieves the command line options and returns a kv dict """
     global __DEBUG__
-
     args = parser.parse_args()
     fmt = "%(asctime)-15s %(levelname)-8s %(lineno)5d:%(module)s:%(funcName)-25s %(message)s"
     log_file = args.log_file
@@ -180,7 +168,6 @@ def get_command_options(parser):
 
     # Set up the logging infrastructure before we do anything.  To ensure we mark the start of a
     # new instance, log the initialization using the level chosen.
-    # logging.basicConfig(filename=args.log_file, format=fmt, level=logging.INFO)
     if args.log_level:
         if 'debug' in args.log_level:
             logging.basicConfig(
@@ -221,19 +208,16 @@ def get_command_options(parser):
             logging.error('Invalid debug level.  Exiting the program.')
             sys.exit(1)
 
-    # Retrieve the data type(s) to collect.
+    # Collect only the type of data specified (heartrate, sleep, steps)
     if args.all:
         options['collect_type'] = 'daily'
     elif args.collect_type:
         options['collect_type'] = args.collect_type
         logging.info('Collecting information for: ' + args.collect_type)
     else:
-        logging.warning(
-            'You need to specify the type of data to collect or use the -a flag'
-        )
+        logging.warning('You need to specify the type of data to collect or use the -a flag')
         sys.exit(1)
 
-    # Use the specified configuration file.  There is no default.
     if args.configfile:
         if path.exists(args.configfile):
             options['config_file'] = args.configfile
@@ -246,9 +230,7 @@ def get_command_options(parser):
         (args.date_to_collect and (args.start_date or args.end_date))):
         logging.error('Illegal date specifications.  Exiting')
         sys.exit(1)
-
     elif args.number_of_days:
-        # Use number of days before today
         if args.number_of_days <= 0:
             logging.error(
                 "Number of days needs to be greater than zero.  Exiting")
@@ -257,9 +239,7 @@ def get_command_options(parser):
             options['number_of_days'] = args.number_of_days
             logging.info(
                 "Number of days previous: " + str(options['number_of_days']))
-
     elif args.date_to_collect:
-        # Collect for a specific day
         if is_valid_date(args.date_to_collect):
             options['date_to_collect'] = args.date_to_collect
             logging.info(
@@ -268,7 +248,6 @@ def get_command_options(parser):
             print('Invalid date specified.  Exiting.')
             logging.error('Invalid date: ' + str(args.date_to_collect))
             sys.exit(1)
-
     elif args.start_date and args.end_date:
         if not is_valid_date(args.start_date):
             print('Invalid start date specified.  Exiting.')
@@ -286,7 +265,6 @@ def get_command_options(parser):
             options['end_date'] = args.end_date
             logging.info('Start date: ' + args.start_date)
             logging.info('End date: ' + args.end_date)
-
     else:
         logging.error('Both start and end dates need to be specified. Exiting.')
         sys.exit(1)
@@ -352,6 +330,7 @@ def get_heartrate(oauth_client, start_date, time_interval, results_file):
 
     if hr['activities-heart'][0]['value'] != 0:
         df = pd.json_normalize(hr['activities-heart-intraday'], record_path=['dataset'], sep='_')
+        df.loc[:, 'time'] = pd.to_datetime((start_date)+' '+ (df.time.astype(str)))
         df.to_csv(results_file, header=True, index=False)
         with open(results_file.replace('.csv', '.json'), 'w') as json_file:
             json.dump(hr, json_file)
@@ -383,6 +362,7 @@ def get_steps(oauth_client, start_date, time_interval, results_file):
 
     if steps['activities-steps'][0]['value'] != 0:
         df = pd.json_normalize(steps['activities-steps-intraday'], record_path=['dataset'], sep='_')
+        df.loc[:, 'time'] = pd.to_datetime((start_date)+' '+ (df.time.astype(str)))
         df.to_csv(results_file, header=True, index=False)
         with open(results_file.replace('.csv', '.json'), 'w') as json_file:
             json.dump(steps, json_file)
@@ -411,6 +391,7 @@ def get_sleep(oauth_client, start_date, results_file):
 
     if sleep['summary']['totalMinutesAsleep'] != 0:
         df = pd.json_normalize(sleep['sleep'], record_path=['minuteData'], sep='_')
+#        df.loc[:, 'dateTime'] = pd.to_datetime((start_date)+' '+ (df.dateTime.astype(str)))
         df.to_csv(results_file, header=True, index=False)
         with open(results_file.replace('.csv', '.json'), 'w') as json_file:
           json.dump(sleep, json_file)
@@ -418,7 +399,8 @@ def get_sleep(oauth_client, start_date, results_file):
     else:
         logging.info("No sleep data for " + str(start_date))
         return()
-
+#
+#
 if __name__ == '__main__':
     parser = set_command_options()
     options = get_command_options(parser)
@@ -427,52 +409,37 @@ if __name__ == '__main__':
     with open(options['config_file']) as json_config_file:
         data = json.load(json_config_file)
 
-    # Connect to the fitbit server using oauth2 See the page https://dev.fitbit.com/build/reference/web-api/oauth2/
     if data['access_token'] == '':
-        print(
-            "No access token found.  Please generate and place in the configuration file."
-        )
+        print('No access token found.  Please generate and place in the configuration file.')
         logging.error('No access token found.  Exiting.')
         sys.exit(1)
 
+    # Connect to the fitbit server using oauth2 See the page https://dev.fitbit.com/build/reference/web-api/oauth2/
     try:
-        authd_client = fitbit.Fitbit(
-            data['client_id'],
-            data['client_secret'],
-            access_token=data['access_token'])
-        authd_client2 = fitbit.Fitbit(
-            data['client_id'],
-            data['client_secret'],
-            oauth2=True,
-            access_token=data['access_token'],
-            refresh_token=data['refresh_token'],
-            refresh_cb=refresh_new_token)
+        authd_client = fitbit.Fitbit(data['client_id'], data['client_secret'],access_token=data['access_token'])
+        authd_client2 = fitbit.Fitbit(data['client_id'],data['client_secret'],oauth2=True,access_token=data['access_token'],
+                                      refresh_token=data['refresh_token'],refresh_cb=refresh_new_token)
 
     except auth.exceptions.HTTPUnauthorized:
-        print(
-            'Please provide latest refresh and access tokens for oauth2. Exiting program.'
-        )
-        logging.error(
-            'Please provide latest refresh and access tokens for oauth2. Exiting program.'
-        )
+        print('Please provide latest refresh and access tokens for oauth2. Exiting program.')
+        logging.error('Please provide latest refresh and access tokens for oauth2. Exiting program.')
         sys.exit(1)
 
     # Note that that there is a limit of 150 api requests per hour. If the
     # requested number of days will exceed that, message back to the caller and exit.
+    # ToDo (dph): This should be placed in a sleep or loop.  Maybe an option.
     request_limit = 150
     num_types = 0
-    if 'heartrate' in options['collect_type']:
-        num_types += 1
-    if 'sleep' in options['collect_type']:
-        num_types += 1
-    if 'steps' in options['collect_type']:
-        num_types += 1
+    if 'heartrate' in options['collect_type']:  num_types += 1
+    if 'sleep' in options['collect_type']:      num_types += 1
+    if 'steps' in options['collect_type']:      num_types += 1
     max_days = int(request_limit / num_types)
     logging.info('Max days: ' + str(max_days))
     number_of_days_requested_int = 1
 
+    # Get the start date and number of days to requested.
     if 'end_date' in options and 'start_date' in options:
-        # Get the start date and number of days to requested.  Ensure it does not exceed the api limit/hr
+        # Ensure it does not exceed the api limit/hr 
         # Note that this assumes there have been no other api requests during the hour.
         start_date = datetime.strptime(options['start_date'], '%Y-%m-%d')
         end_date = datetime.strptime(options['end_date'], '%Y-%m-%d')
@@ -481,16 +448,13 @@ if __name__ == '__main__':
         logging.info('Startdate:' + str(start_date))
         logging.info('Enddate:' + str(end_date))
         logging.info('Days requested vale: ' + str(number_of_days_requested))
-        logging.info('Number of interger days requested: ' +
-                     str(number_of_days_requested_int))
+        logging.info('Number of interger days requested: ' + str(number_of_days_requested_int))
 
         if number_of_days_requested_int > max_days:
-            logging.error(
-                'Requested days exceed number calls per hour.  Exiting')
+            logging.error('Requested days exceed number calls per hour.  Exiting')
             sys.exit(1)
 
     elif 'number_of_days' in options:
-        # Use the --days option
         today = datetime.today()
         start_date = today - timedelta(days=options['number_of_days'])
         start_date_str = datetime.strftime(start_date, "%Y-%m-%d")
@@ -507,20 +471,16 @@ if __name__ == '__main__':
 
     # Iterrate through the days.  If we just have a single date, start there
     # and use the date specified.
-    for d in tqdm(
-            range(0, number_of_days_requested_int),
-            desc='Retrieving data',
-            ascii=True):
+    for d in tqdm(range(0, number_of_days_requested_int),desc='Retrieving data',ascii=True):
         start_date_str = str(start_date.strftime('%Y-%m-%d'))
         start_date = start_date + timedelta(days=1)
 
         try:
-            # print('Collecting data for: ' + start_date_str)
             if 'heartrate' in options['collect_type']:
                 tmp = 'hr_intraday_' + start_date_str + '.csv'
                 heartrate_file = os.path.join (options['output_dir'], tmp)
                 heartrate_df = get_heartrate(oauth_client=authd_client2, start_date=start_date_str, time_interval='1sec', results_file=heartrate_file)
-
+                
             if 'steps' in options['collect_type']:
                 tmp = 'steps_intraday_' + start_date_str + '.csv'
                 steps_file = os.path.join(options['output_dir'], tmp)
@@ -543,29 +503,20 @@ if __name__ == '__main__':
 
         except fitbit.exceptions.HTTPUnauthorized:
             # Response code = 401, the token has expired, exit for now.  We should not get here.
-            print(
-                'Please provide latest refresh and access tokens for oauth2. Exiting program.'
-            )
-            logging.error(
-                'Please provide latest refresh and access tokens for oauth2. Exiting program.'
-            )
+            print('Please provide latest refresh and access tokens for oauth2. Exiting program.')
+            logging.error('Please provide latest refresh and access tokens for oauth2. Exiting program.')
             sys.exit(1)
 
         except fitbit.exceptions.HTTPForbidden:
             # Response code = 403.
-            print(
-                'You are not allowed to excute the function requested.  Exiting program.'
-            )
-            logging.error(
-                'You are not allowed to excute the function requested.  Exiting program.'
-            )
+            print('You are not allowed to excute the function requested.  Exiting program.')
+            logging.error('You are not allowed to excute the function requested.  Exiting program.')
             sys.exit(1)
 
         except fitbit.exceptions.HTTPNotFound:
             #  Response code = 404.
             print('Requested function or data not found.  Exiting program.')
-            logging.error(
-                'Requested function or data not found.  Exiting program.')
+            logging.error('Requested function or data not found.  Exiting program.')
             sys.exit(1)
 
         except fitbit.exceptions.HTTPConflict:
@@ -576,13 +527,9 @@ if __name__ == '__main__':
 
         except fitbit.exceptions.HTTPTooManyRequests:
             #  Response code = 429.
-            print(
-                'Rate limit exceeded. Rerun program after 1 hour. Exiting program.'
-            )
+            print('Rate limit exceeded. Rerun program after 1 hour. Exiting program.')
             print('Stopped at: ' + start_date_str)
-            logging.error(
-                'Rate limit exceeded. Rerun program after 1 hour. Exiting program.'
-            )
+            logging.error('Rate limit exceeded. Rerun program after 1 hour. Exiting program.')
             logging.info('Stopped at: ' + start_date_str)
             sys.exit(1)
 
