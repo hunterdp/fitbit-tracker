@@ -57,12 +57,12 @@ from datetime import datetime
 from datetime import date
 from datetime import timedelta
 
-global __AUTHOR__ = 'David Hunter'
-global __VERSION__ = 'fitbit-tracker ver 1-0'
-global __LOG_NAME__ = 'fitbit-tracker.log'
-global __TITLE__ = 'fitebit-tracker.py'
-global __DEBUG__ = False
-global CONFIG_FILE = ''
+__AUTHOR__ = 'David Hunter'
+__VERSION__ = 'fitbit-tracker ver 1-0'
+__LOG_NAME__ = 'fitbit-tracker.log'
+__TITLE__ = 'fitebit-tracker.py'
+__DEBUG__ = False
+CONFIG_FILE = ''
 
 def set_command_options():
     "Sets the command line arguments."
@@ -166,8 +166,7 @@ def get_command_options(parser):
     line_sep = '--------------------------------------------------------------------------------'
     msg = 'Starting ' + __TITLE__ + ' ' + __VERSION__
 
-    # Set up the logging infrastructure before we do anything.  To ensure we mark the start of a
-    # new instance, log the initialization using the level chosen.
+    # Set up the logging infrastructure before we do anything.  
     if args.log_level:
         if 'debug' in args.log_level:
             logging.basicConfig(
@@ -270,7 +269,7 @@ def get_command_options(parser):
         sys.exit(1)
 
     if not os.path.isdir(args.output_dir):
-        logging.error('Directory does not exist')
+        logging.error('The output directory does not exist')
         sys.exit(1)
     else:
         options['output_dir'] = args.output_dir
@@ -289,12 +288,10 @@ def refresh_new_token(token):
     new_refresh_token = token['refresh_token']
     new_expires_at = token['expires_at']
     logging.info('Refreshing token.')
-    logging.info('New token will expire at: ' + str(new_expires_at))
+    logging.info('New token will expire at: ' + str(datetime.fromtimestamp(new_expires_at)))
 
-    # open the configuration file and save the new tokens.
     with open(CONFIG_FILE) as json_config_file:
         data = json.load(json_config_file)
-
     data['access_token'] = new_access_token
     data['refresh_token'] = new_refresh_token
     data['token_expires'] = new_expires_at
