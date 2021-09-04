@@ -80,6 +80,7 @@ def set_command_options():
         type=str,
         default='config.json')
     parser.add_argument(
+        '--log',
         '--log_level',
         dest='log_level',
         help='Set the logging level [debug info warning error] (default: %(default)s)',
@@ -88,7 +89,7 @@ def set_command_options():
         default='info')
     parser.add_argument(
         '-l',
-        '--log',
+        '--log_file',
         help='Set the logfile name. (default: %(default)s)',
         action='store',
         type=str,
@@ -157,7 +158,7 @@ def set_command_options():
 
 
 def get_command_options(parser):
-    """ Retrieves the command line options and returns a kv dict """
+    """ Retrieves and validates command line options and returns a kv dict """
     global __DEBUG__
     args = parser.parse_args()
     fmt = "%(asctime)-15s %(levelname)-8s %(lineno)5d:%(module)s:%(funcName)-25s %(message)s"
@@ -205,6 +206,7 @@ def get_command_options(parser):
             logging.basicConfig(
                 filename=args.log_file, format=fmt, level=logging.INFO)
             logging.error('Invalid debug level.  Exiting the program.')
+            print('Invalid debug level.  Exiting the program.')
             sys.exit(1)
 
     # Collect only the type of data specified (heartrate, sleep, steps)
@@ -221,43 +223,44 @@ def get_command_options(parser):
         if path.exists(args.configfile):
             options['config_file'] = args.configfile
         else:
-            logging.error("Configuration file does not exist.  Exiting.")
+            logging.error('Configuration file ' + args.configfile + ' does not exist.  Exiting.')
+            print('Configuration file ' + args.configfile + ' does not exist.')
             sys.exit(1)
 
     # Retrieve the the day(s) to collect data for
     if ((args.number_of_days and (args.start_date or args.end_date)) or
         (args.date_to_collect and (args.start_date or args.end_date))):
         logging.error('Illegal date specifications.  Exiting')
+        print('Illegal date specifications.')
         sys.exit(1)
     elif args.number_of_days:
         if args.number_of_days <= 0:
-            logging.error(
-                "Number of days needs to be greater than zero.  Exiting")
+            logging.error(str(args.number_of_days) + ' is an illegal number of days. Must be greater than zero.  Exiting')
+            print(str(args.number_of_days) + ' is an illegal number of days. Must be greater than zero.')
             sys.exit(1)
         else:
             options['number_of_days'] = args.number_of_days
-            logging.info(
-                "Number of days previous: " + str(options['number_of_days']))
+            logging.info('Number of days previous: ' + str(options['number_of_days']))
     elif args.date_to_collect:
         if is_valid_date(args.date_to_collect):
             options['date_to_collect'] = args.date_to_collect
-            logging.info(
-                "Date to collect for: " + str(options['date_to_collect']))
+            logging.info('Date to collect for: ' + str(options['date_to_collect']))
         else:
-            print('Invalid date specified.  Exiting.')
-            logging.error('Invalid date: ' + str(args.date_to_collect))
+            logging.error(str(args.date_to_collect) + ' is an invalid date.  Exiting.')
+            print(str(options['date_to_collect']) + ' is an invalid date.')
             sys.exit(1)
     elif args.start_date and args.end_date:
         if not is_valid_date(args.start_date):
-            print('Invalid start date specified.  Exiting.')
-            logging.error('Invalid start date: ' + str(args.start_date))
+            logging.error(str(args.start_date) + ' is an invalid start date.  Exiting.')
+            print(str(args.start_date) + ' is an invalid start date.')
             sys.exit(1)
         elif not is_valid_date(args.end_date):
-            print('Invalid end date specified.  Exiting.')
-            logging.error('Invalid end date: ' + str(args.end_date))
+            logging.error(str(args.end_date) + ' is an invalid start date.  Exiting.')
+            print(str(args.end_date) + ' is an invalid start date.')
             sys.exit(1)
         elif args.start_date > args.end_date:
-            logging.error("Start date is after end date. Exiting.")
+            logging.error('Start date: ' + str(args.start_date) + ' is after end date: ' + str(args.end_date) + ' . Exiting.')
+            print('Start date: ' + str(args.start_date) + ' is after end date: ' + str(args.end_date) + ' .')
             sys.exit(1)
         else:
             options['start_date'] = args.start_date
@@ -265,11 +268,13 @@ def get_command_options(parser):
             logging.info('Start date: ' + args.start_date)
             logging.info('End date: ' + args.end_date)
     else:
-        logging.error('Both start and end dates need to be specified. Exiting.')
+        logging.error('Invalide collection days specified.  Both start and end dates need to be specified. Exiting.')
+        print('Please specify collection days.')
         sys.exit(1)
 
     if not os.path.isdir(args.output_dir):
-        logging.error('The output directory does not exist')
+        logging.error('The output directory ' + str(args.output_dir) + ' does not exist.  Exiting.')
+        print('The output directory ' + str(args.output_dir) + ' does not exist.')
         sys.exit(1)
     else:
         options['output_dir'] = args.output_dir
@@ -430,7 +435,10 @@ if __name__ == '__main__':
     if 'heartrate' in options['collect_type']:  num_types += 1
     if 'sleep' in options['collect_type']:      num_types += 1
     if 'steps' in options['collect_type']:      num_types += 1
-    max_days = int(request_limit / num_types)
+    if num_types > 0 :
+        max_days = int(request_limit / num_types)
+    else:
+        max_days = 150
     logging.info('Max days: ' + str(max_days))
     number_of_days_requested_int = 1
 
@@ -473,23 +481,23 @@ if __name__ == '__main__':
         start_date = start_date + timedelta(days=1)
 
         try:
-            if 'heartrate' in options['collect_type']:
-                tmp = 'hr_intraday_' + start_date_str + '.csv'
-                heartrate_file = os.path.join (options['output_dir'], tmp)
-                heartrate_df = get_heartrate(oauth_client=authd_client2, start_date=start_date_str, time_interval='1sec', results_file=heartrate_file)
-                
-            if 'steps' in options['collect_type']:
-                tmp = 'steps_intraday_' + start_date_str + '.csv'
-                steps_file = os.path.join(options['output_dir'], tmp)
-                steps_df = get_steps(oauth_client=authd_client2, start_date=start_date_str, time_interval='1min', results_file=steps_file)
-
-            if 'sleep' in options['collect_type']:
-                tmp = 'sleep_day_' + start_date_str + '.csv'
-                sleep_file = os.path.join(options['output_dir'], tmp)
-                sleep_df = get_sleep(oauth_client=authd_client2, start_date=start_date, results_file=sleep_file)
+            tmp = 'hr_intraday_' + start_date_str + '.csv'
+            heartrate_file = os.path.join (options['output_dir'], tmp)
+            tmp = 'steps_intraday_' + start_date_str + '.csv'
+            steps_file = os.path.join(options['output_dir'], tmp)
+            tmp = 'sleep_day_' + start_date_str + '.csv'
+            sleep_file = os.path.join(options['output_dir'], tmp)
 
             if 'daily' in options['collect_type']:
-                print('Collect all daily metrics')
+                heartrate_df = get_heartrate(oauth_client=authd_client2, start_date=start_date_str, time_interval='1sec', results_file=heartrate_file)
+                steps_df = get_steps(oauth_client=authd_client2, start_date=start_date_str, time_interval='1min', results_file=steps_file)
+                sleep_df = get_sleep(oauth_client=authd_client2, start_date=start_date, results_file=sleep_file)
+            elif 'heartrate' in options['collect_type']:
+                heartrate_df = get_heartrate(oauth_client=authd_client2, start_date=start_date_str, time_interval='1sec', results_file=heartrate_file)
+            elif 'steps' in options['collect_type']:
+                steps_df = get_steps(oauth_client=authd_client2, start_date=start_date_str, time_interval='1min', results_file=steps_file)
+            elif 'sleep' in options['collect_type']:
+                sleep_df = get_sleep(oauth_client=authd_client2, start_date=start_date, results_file=sleep_file)
 
         # Try and recover from exceptions and if not, gracefully report and exit.
         except fitbit.exceptions.HTTPBadRequest:
