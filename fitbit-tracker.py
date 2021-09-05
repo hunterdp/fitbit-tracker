@@ -393,7 +393,9 @@ def get_sleep(oauth_client, start_date, results_file):
 
     if sleep['summary']['totalMinutesAsleep'] != 0:
         df = pd.json_normalize(sleep['sleep'], record_path=['minuteData'], sep='_')
-#        df.loc[:, 'dateTime'] = pd.to_datetime((start_date)+' '+ (df.dateTime.astype(str)))
+        print(str(df.dateTime))
+        # This doesn't work.
+        #df.loc[:, 'dateTime'] = pd.to_datetime((start_date)) #+' '+ (df.time.astype(str)))
         df.to_csv(results_file, header=True, index=False)
         with open(results_file.replace('.csv', '.json'), 'w') as json_file:
           json.dump(sleep, json_file)
