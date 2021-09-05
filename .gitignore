@@ -15,3 +15,7 @@
 hr_*.json
 sleep_*.json
 steps_*.json
+.fitbit-env
+.fitbit-env/*
+.fitbit-env/*.*
+
