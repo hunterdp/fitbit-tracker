@@ -29,7 +29,6 @@ import json
 import os
 import os.path
 import sys
-import requests
 import pandas as pd
 import logging
 import logging.handlers
@@ -41,9 +40,9 @@ from datetime import date
 from datetime import timedelta
 
 __AUTHOR__ = 'David Hunter'
-__VERSION__ = 'fitbit-tracker ver 1-0'
+__VERSION__ = 'fitbit-tracker ver 1-1'
 __LOG_NAME__ = 'fitbit-tracker.log'
-__TITLE__ = 'fitebit-tracker.py'
+__TITLE__ = 'fitbit-tracker.py'
 __DEBUG__ = False
 CONFIG_FILE = ''
 
@@ -101,7 +100,7 @@ def set_command_options():
     parser.add_argument(
         '-j',
         '--json',
-        help='Save original JSON data.',
+        help='Save original JSON data files.',
         action='store_true')
     group.add_argument(
         '-a',
@@ -295,13 +294,14 @@ def is_valid_date(date_to_check):
         return (False)
     return (True)
 
-def get_heartrate(oauth_client, start_date, time_interval, results_file):
+def get_heartrate(oauth_client, start_date, time_interval, results_file, save_json):
     """ Retrieve the intraday heartrate data and store to a file.
     Args:
       oauth_client:  An OAuth2 client id.
       start_date:    Collect starting at this date
       time_interval: Time ganualarity to collect. See fitbit documentation
       results_file:  The name of the file to store results in
+      save_json:     Generate json file
     Returns:
       A dataframe with the time and values.
     """
@@ -317,15 +317,16 @@ def get_heartrate(oauth_client, start_date, time_interval, results_file):
         df = pd.json_normalize(hr['activities-heart-intraday'], record_path=['dataset'], sep='_')
         df.loc[:, 'time'] = pd.to_datetime((start_date)+' '+ (df.time.astype(str)))
         df.to_csv(results_file, header=True, index=False)
-        with open(results_file.replace('.csv', '.json'), 'w') as json_file:
-            json.dump(hr, json_file)
+        if save_json:
+            with open(results_file.replace('.csv', '.json'), 'w') as json_file:
+                json.dump(hr, json_file)
         return (df)
 
     else:
         logging.info("No heartrate data for " + str(start_date))
         return ()
 
-def get_steps(oauth_client, start_date, time_interval, results_file):
+def get_steps(oauth_client, start_date, time_interval, results_file, save_json):
     """Retrieve the step count for the day at the specified interval, store
        data in a file and returns the data in a panda dataframe.
     Args:
@@ -333,6 +334,7 @@ def get_steps(oauth_client, start_date, time_interval, results_file):
       start_date:    Collect starting at this date
       time_interval: Time ganualarity to collect. See fitbit documentation
       results_file:  The name of the file to store results in
+      save_json:     Flag to generate json file
     Returns:
       A dataframe with the time and values.
       NB: 2 files are stored each time.
@@ -349,22 +351,24 @@ def get_steps(oauth_client, start_date, time_interval, results_file):
         df = pd.json_normalize(steps['activities-steps-intraday'], record_path=['dataset'], sep='_')
         df.loc[:, 'time'] = pd.to_datetime((start_date)+' '+ (df.time.astype(str)))
         df.to_csv(results_file, header=True, index=False)
-        with open(results_file.replace('.csv', '.json'), 'w') as json_file:
-            json.dump(steps, json_file)
+        if save_json:
+            with open(results_file.replace('.csv', '.json'), 'w') as json_file:
+                json.dump(steps, json_file)
         return (df)
 
     else:
         logging.info("No step data for " + str(start_date))
         return ()
 
-def get_sleep(oauth_client, start_date, results_file):
+def get_sleep(oauth_client, start_date, results_file, save_json):
     """ Retrieve the sleep data for the day, store in datafile and return the dataframe.
     Args:
-      oauth_client:  An OAuth2 client id.
-      start_date:    Collect starting at this date
-      time_interval: Time ganualarity to collect. See fitbit documentation
-      results_file:  The name of the file to store results in
-      api_ver:       The API version to use (1 or 1.2)
+      oauth_client:     An OAuth2 client id.
+      start_date:       Collect starting at this date
+      time_interval:    Time ganualarity to collect. See fitbit documentation
+      results_file:     The name of the file to store results in
+      save_json:        Boolean to save json files as well
+      api_ver:          The API version to use (1 or 1.2)
     Returns:
       A dataframe with the time and values.
     
@@ -386,7 +390,6 @@ def get_sleep(oauth_client, start_date, results_file):
         it can be aligned with the heartbeat data.  Maping for the values are:
         1=Asleep, 2=restless, 3=awake [NB: This is for fitbit api v1 only]
     """
-
     sub_day = timedelta(1)
     start_date = start_date - sub_day
     sleep = authd_client2.get_sleep(start_date)
@@ -396,8 +399,9 @@ def get_sleep(oauth_client, start_date, results_file):
         df = pd.json_normalize(sleep['sleep'], record_path=['minuteData'], sep='_')
         df.loc[:, 'dateTime'] = pd.to_datetime(str(start_date) +' '+ df.dateTime)
         df.to_csv(results_file, header=True, index=False)
-        with open(results_file.replace('.csv', '.json'), 'w') as json_file:
-          json.dump(sleep, json_file)
+        if save_json:
+            with open(results_file.replace('.csv', '.json'), 'w') as json_file:
+                json.dump(sleep, json_file)
         return (df)
     else:
         logging.info("No sleep data for " + str(start_date))
@@ -423,9 +427,6 @@ if __name__ == '__main__':
     Once setup with an initial OAuth2 token and refresh token, new tokens will be
     retrieved and the configuration file will be updated.
 
-    TODO(dph):  Shift from storing in csv files to saving the entire JSON data strings.
-                This data can then be parsed easier and consolidated as needed in
-                later stages of processing.
     """
 
     parser = set_command_options()
@@ -514,15 +515,15 @@ if __name__ == '__main__':
             sleep_file = os.path.join(options['output_dir'], tmp)
 
             if 'daily' in options['collect_type']:
-                heartrate_df = get_heartrate(oauth_client=authd_client2, start_date=start_date_str, time_interval='1sec', results_file=heartrate_file)
-                steps_df = get_steps(oauth_client=authd_client2, start_date=start_date_str, time_interval='1min', results_file=steps_file)
-                sleep_df = get_sleep(oauth_client=authd_client2, start_date=start_date, results_file=sleep_file)
+                heartrate_df = get_heartrate(oauth_client=authd_client2, start_date=start_date_str, time_interval='1sec', results_file=heartrate_file, save_json=options['json'])
+                steps_df = get_steps(oauth_client=authd_client2, start_date=start_date_str, time_interval='1min', results_file=steps_file, save_json=options['json'])
+                sleep_df = get_sleep(oauth_client=authd_client2, start_date=start_date, results_file=sleep_file, save_json=options['json'])
             elif 'heartrate' in options['collect_type']:
-                heartrate_df = get_heartrate(oauth_client=authd_client2, start_date=start_date_str, time_interval='1sec', results_file=heartrate_file)
+                heartrate_df = get_heartrate(oauth_client=authd_client2, start_date=start_date_str, time_interval='1sec', results_file=heartrate_file, save_json=options['json'])
             elif 'steps' in options['collect_type']:
-                steps_df = get_steps(oauth_client=authd_client2, start_date=start_date_str, time_interval='1min', results_file=steps_file)
+                steps_df = get_steps(oauth_client=authd_client2, start_date=start_date_str, time_interval='1min', results_file=steps_file, save_json=options['json'])
             elif 'sleep' in options['collect_type']:
-                sleep_df = get_sleep(oauth_client=authd_client2, start_date=start_date, results_file=sleep_file)
+                sleep_df = get_sleep(oauth_client=authd_client2, start_date=start_date, results_file=sleep_file, save_json=options['json'])
 
         # Try and recover from exceptions and if not, gracefully report and exit.
         except fitbit.exceptions.HTTPBadRequest:
