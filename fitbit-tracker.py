@@ -21,23 +21,6 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-# Simple retrieving of fitbit information.
-#
-# A simple module to collect fitbit information, parse it and store it in csv files.
-# The configuration infomration is read from the .json file passed in and must be submitted.
-# There are various command line options that allow the collectin of a specified day in
-# relation to the current day.  By default the program will collect data from yesterday
-# and store it accordinly.
-#
-# To collect data over long periods of time, put this into a script and call it once a
-# day.  This will generate a directory of data files suitable for post processing.
-#
-# Once setup with an initial OAuth2 token and refresh token, new tokens will be
-# retrieved and the configuration file will be updated.
-#
-# TODO(dph): Shift from storing in csv files to saving the entire JSON data strings.
-#            This data can then be parsed easier and consolidated as needed in
-#            later stages of processing.
 
 import fitbit
 import inspect
@@ -53,7 +36,7 @@ import logging.handlers
 import io
 from tqdm import tqdm
 from os import path
-from datetime import datetime
+from datetime import datetime, time
 from datetime import date
 from datetime import timedelta
 
@@ -381,21 +364,37 @@ def get_sleep(oauth_client, start_date, results_file):
       start_date:    Collect starting at this date
       time_interval: Time ganualarity to collect. See fitbit documentation
       results_file:  The name of the file to store results in
+      api_ver:       The API version to use (1 or 1.2)
     Returns:
       A dataframe with the time and values.
-      NB: 2 files are stored each time.
+    
+    NB: Sleep is actually reported for the next day since it starts
+        prior to midnight.  To correct, subtract one day from the date
+        passed in.
+
+        There can be multiple sleep periods (aka: naps).  They are broken 
+        up into main and non-main sleep periods and can be found via the
+        totalSleepRecords variable.
+
+        The format and information of sleep changed from v1 to v1.2.  
+        See: https://dev.fitbit.com/build/reference/web-api/sleep/ and
+        https://dev.fitbit.com/build/reference/web-api/sleep-v1/.  It appears that
+        the python Fitbit library only reports the v1.  V1 is deprecated, but provides more 
+        fidelity similiar to the heartbeat and sleep.  
+
+        We need to translate the "value" if sleep into the different categories so
+        it can be aligned with the heartbeat data.  Maping for the values are:
+        1=Asleep, 2=restless, 3=awake [NB: This is for fitbit api v1 only]
     """
-    # Retrieve the sleep data.  We need to translate the "value" if sleep into the different categories so
-    # it can be aligned with the heartbeat data.  Maping for the values are:
-    # 1=Asleep, 2=restless, 3=awake [NB: This is for fitbit api v1 only]
+
+    sub_day = timedelta(1)
+    start_date = start_date - sub_day
     sleep = authd_client2.get_sleep(start_date)
     logging.debug(json.dumps(sleep, indent=2))
 
     if sleep['summary']['totalMinutesAsleep'] != 0:
         df = pd.json_normalize(sleep['sleep'], record_path=['minuteData'], sep='_')
-        print(str(df.dateTime))
-        # This doesn't work.
-        #df.loc[:, 'dateTime'] = pd.to_datetime((start_date)) #+' '+ (df.time.astype(str)))
+        df.loc[:, 'dateTime'] = pd.to_datetime(str(start_date) +' '+ df.dateTime)
         df.to_csv(results_file, header=True, index=False)
         with open(results_file.replace('.csv', '.json'), 'w') as json_file:
           json.dump(sleep, json_file)
@@ -405,7 +404,30 @@ def get_sleep(oauth_client, start_date, results_file):
         return()
 #
 #
+
 if __name__ == '__main__':
+#   main()
+#def main():
+
+    """ Simple retrieving of fitbit information.
+
+    A simple module to collect fitbit information, parse it and store it in csv files.
+    The configuration infomration is read from the .json file passed in and must be submitted.
+    There are various command line options that allow the collectin of a specified day in
+    relation to the current day.  By default the program will collect data from yesterday
+    and store it accordinly.
+
+    To collect data over long periods of time, put this into a script and call it once a
+    day.  This will generate a directory of data files suitable for post processing.
+
+    Once setup with an initial OAuth2 token and refresh token, new tokens will be
+    retrieved and the configuration file will be updated.
+
+    TODO(dph):  Shift from storing in csv files to saving the entire JSON data strings.
+                This data can then be parsed easier and consolidated as needed in
+                later stages of processing.
+    """
+
     parser = set_command_options()
     options = get_command_options(parser)
     CONFIG_FILE = options['config_file']
@@ -424,9 +446,9 @@ if __name__ == '__main__':
         authd_client2 = fitbit.Fitbit(data['client_id'],data['client_secret'],oauth2=True,access_token=data['access_token'],
                                       refresh_token=data['refresh_token'],refresh_cb=refresh_new_token)
 
-    except auth.exceptions.HTTPUnauthorized:
+    except authd_client.exceptions.HTTPUnauthorized:
         print('Please provide latest refresh and access tokens for oauth2. Exiting program.')
-        logging.error('Please provide latest refresh and access tokens for oauth2. Exiting program.')
+        logging.error('HTTPUnauthorized: Please provide latest refresh and access tokens for oauth2. Exiting program.')
         sys.exit(1)
 
     # Note that that there is a limit of 150 api requests per hour. If the
@@ -476,8 +498,9 @@ if __name__ == '__main__':
         logging.error('No date specified.  Exiting')
         sys.exit(1)
 
-    # Iterrate through the days.  If we just have a single date, start there
-    # and use the date specified.
+    #
+    # Main loop to iterrate through the days.  
+    #
     for d in tqdm(range(0, number_of_days_requested_int),desc='Retrieving data',ascii=True):
         start_date_str = str(start_date.strftime('%Y-%m-%d'))
         start_date = start_date + timedelta(days=1)
@@ -505,43 +528,44 @@ if __name__ == '__main__':
         except fitbit.exceptions.HTTPBadRequest:
             # Response code = 400.
             print('An unhandled exception.  Exiting program.')
-            logging.error('An unhandled exception.  Exiting program.')
+            logging.error('HTTPBadRequest: An unhandled exception. Exiting program.')
             sys.exit(1)
 
         except fitbit.exceptions.HTTPUnauthorized:
             # Response code = 401, the token has expired, exit for now.  We should not get here.
             print('Please provide latest refresh and access tokens for oauth2. Exiting program.')
-            logging.error('Please provide latest refresh and access tokens for oauth2. Exiting program.')
+            logging.error('HTTPUnauthorized: Please provide latest refresh and access tokens for oauth2. Exiting program.')
             sys.exit(1)
 
         except fitbit.exceptions.HTTPForbidden:
             # Response code = 403.
             print('You are not allowed to excute the function requested.  Exiting program.')
-            logging.error('You are not allowed to excute the function requested.  Exiting program.')
+            logging.error('HTTPForbidden: You are not allowed to excute the function requested.  Exiting program.')
             sys.exit(1)
 
         except fitbit.exceptions.HTTPNotFound:
             #  Response code = 404.
             print('Requested function or data not found.  Exiting program.')
-            logging.error('Requested function or data not found.  Exiting program.')
+            logging.error('HTTPNotFound: Requested function or data not found.  Exiting program.')
             sys.exit(1)
 
         except fitbit.exceptions.HTTPConflict:
             #  Response code = 409.
             print('Conflict when creating resources.  Exiting program.')
-            logging.error('Conflict when creating resources.  Exiting program.')
+            logging.error('HTTPConflict: Conflict when creating resources.  Exiting program.')
             sys.exit(1)
 
         except fitbit.exceptions.HTTPTooManyRequests:
             #  Response code = 429.
             print('Rate limit exceeded. Rerun program after 1 hour. Exiting program.')
             print('Stopped at: ' + start_date_str)
-            logging.error('Rate limit exceeded. Rerun program after 1 hour. Exiting program.')
+            logging.error('HTTPTooManyRequests: Rate limit exceeded. Rerun program after 1 hour. Exiting program.')
             logging.info('Stopped at: ' + start_date_str)
             sys.exit(1)
 
         except fitbit.exceptions.HTTPServerError:
             # Response code = 500.
             print('A generic error was returned.  Exiting program.')
-            logging.error('A generic error was returned.  Exiting program.')
+            logging.error('HTTPServerError: A generic error was returned.  Exiting program.')
             sys.exit(1)
+
