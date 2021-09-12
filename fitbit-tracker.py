@@ -83,7 +83,7 @@ def set_command_options():
         action='store',
         type=str,
         dest='output_dir',
-        default='results')
+        default='./')
     parser.add_argument(
         '-v',
         '--version',
@@ -362,15 +362,15 @@ def get_steps(oauth_client, start_date, time_interval, results_file, save_json):
 
 def get_sleep(oauth_client, start_date, results_file, save_json):
     """ Retrieve the sleep data for the day, store in datafile and return the dataframe.
-    Args:
-      oauth_client:     An OAuth2 client id.
-      start_date:       Collect starting at this date
-      time_interval:    Time ganualarity to collect. See fitbit documentation
-      results_file:     The name of the file to store results in
-      save_json:        Boolean to save json files as well
-      api_ver:          The API version to use (1 or 1.2)
-    Returns:
-      A dataframe with the time and values.
+ 
+      :param oauth_client:     An OAuth2 client id.
+      :param start_date:       Collect starting at this date
+      :param time_interval:    Time ganualarity to collect. See fitbit documentation
+      :param results_file:     The name of the file to store results in
+      :param save_json:        Boolean to save json files as well
+      :param api_ver:          The API version to use (1 or 1.2)
+    
+      :return df:A dataframe with the time and values.
     
     NB: Sleep is actually reported for the next day since it starts
         prior to midnight.  To correct, subtract one day from the date
@@ -397,7 +397,7 @@ def get_sleep(oauth_client, start_date, results_file, save_json):
 
     if sleep['summary']['totalMinutesAsleep'] != 0:
         df = pd.json_normalize(sleep['sleep'], record_path=['minuteData'], sep='_')
-        df.loc[:, 'dateTime'] = pd.to_datetime(str(start_date) +' '+ df.dateTime)
+        df.loc[:, 'dateTime'] = pd.to_datetime((str(start_date) +' '+ df.dateTime))
         df.to_csv(results_file, header=True, index=False)
         if save_json:
             with open(results_file.replace('.csv', '.json'), 'w') as json_file:
@@ -454,7 +454,7 @@ if __name__ == '__main__':
 
     # Note that that there is a limit of 150 api requests per hour. If the
     # requested number of days will exceed that, message back to the caller and exit.
-    # ToDo (dph): This should be placed in a sleep or loop.  Maybe an option.
+    # TODO (dph): This should be placed in a sleep or loop.  Maybe an option.
     request_limit = 150
     num_types = 0
     if 'heartrate' in options['collect_type']:  num_types += 1
