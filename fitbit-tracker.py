@@ -521,7 +521,7 @@ if __name__ == '__main__':
         except fitbit.exceptions.HTTPForbidden:
             # Response code = 403.
             print('You are not allowed to excute the function requested.  Exiting program.')
-            logging.error('HTTPForbidden: You are not allowed to excute the function requested.  Exiting program.')
+            logging.error('HTTPForbidden: You are not allowed to execute the function requested.  Exiting program.')
             sys.exit(1)
 
         except fitbit.exceptions.HTTPNotFound:

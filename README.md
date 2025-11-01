@@ -1,26 +1,30 @@
 # fitbit-tracker and fitbit-analysis
+
 A set of modules to interface with the Fitbit tracking website and do some simple data analysis.  Note that this is for personal use and not a replacement for real medical evaluations.  I developed this after getting frustrated with the very simple web application on the fitbit mobile application as well as the website.  I wanted to be able to do more analytics and correlations of the various data that was being collected.  
 
 Rather than writing a new requests based application, I choose to use the fitbit api module created by [ORCAS](https://github.com/orcasgit/python-fitbit).
 
-For the data analyutics tools, I used standard Python data science utilities.  Each new tools is a separate module.  This simplifies dependencies.  I may make them all into a library of thier own at some point.
+For the data analytics tools, I used standard Python data science utilities.  Each new tools is a separate module.  This simplifies dependencies.  I may make them all into a library of their own at some point.
 
 ## Requirements
+
 * Python version: 3 (It may work on 2.7+)
 * Python Package: numpy, pandas, matplotlib, seaborn, fitbit, tqdm
 
 ## Setup
-1.  You need to create and register a fitbit application [here](https://dev.fitbit.com/apps/new).  Make sure that you select that this is a personal application.  If you do not, you will not be able to retrieve intraday data.
-1.  Go to the application you just registered and select it.  
-1.  Click on the OAuth 2.0 tutorial page.
-1.  Click on Implicit Grant Flow
-1.  Select the scopes you want to allow (typically heartrate, profile, sleep, activity, settings and profile).
-1.  Enter in a time frame for token expiration.  Look at the docs to see the allowed values.
-1.  Follow the rest of the instructions on the page so that you get both an *OAuth 2.0 token* and a *refresh token*.
-1.  Modify the sample config.json filewith your specific values.  Note that you need to supply all values.  If you do not enter the refresh_token, the application will exit when the token expires.
 
-## Fitbit Tracker Usage 
-```
+1. You need to create and register a fitbit application [at the fitbit website](https://dev.fitbit.com/apps/new).  Make sure that you select that this is a personal application.  If you do not, you will not be able to retrieve intraday data.
+1. Go to the application you just registered and select it.  
+1. Click on the OAuth 2.0 tutorial page.
+1. Click on Implicit Grant Flow
+1. Select the scopes you want to allow (typically heartrate, profile, sleep, activity, settings and profile).
+1. Enter in a time frame for token expiration.  Look at the docs to see the allowed values.
+1. Follow the rest of the instructions on the page so that you get both an *OAuth 2.0 token* and a *refresh token*.
+1. Modify the sample config.json file with your specific values.  Note that you need to supply all values.  If you do not enter the refresh_token, the application will exit when the token expires.
+
+## Fitbit Tracker Usage
+
+```text
 usage: Fitbit Tracker [-h] [-d DEBUG_LEVEL] [-l LOG_FILE] [-o OUTPUT_DIR] [-v]
                       [--days NUMBER_OF_DAYS] [-e END_DATE] [-s START_DATE]
                       (-a | -t COLLECT_TYPE)
@@ -53,8 +57,9 @@ optional arguments:
                         sleep, steps)
 ```
 
-## Fitbit Analysis Usage 
-```
+## Fitbit Analysis Usage
+
+```text
 usage: Fitbit Analysis [-h] [-d DEBUG_LEVEL] [-l LOG_FILE] [-o OUTPUT_DIR]
                        [-v] [-e END_DATE] (-a | -t COLLECT_TYPE)
                        (-s START_DATE | --days NUMBER_OF_DAYS | --date DATE_TO_COLLECT)
@@ -82,15 +87,16 @@ optional arguments:
   --days NUMBER_OF_DAYS
                         Number of days to go back and analyze
   --date DATE_TO_COLLECT
-                        Specifc date to collect for
+                        Specific date to collect for
 ```
 
 ## Files
+
 * fitbit-tracker.py - Collects fitbit data and stores the results into a timeseries csv file(s)
 * config.json - JSON configuration file.  Note that this contains secrets so do not store on public systems
 * fitbit-analysis.py - Generates basic analysis of the data.
 
 ## Acknowledgements
+
 * [Oregon Center for Applied Science - ORCA](https://github.com/orcasgit/python-fitbit) - Fitbit API Python Client Implementation
 * [Python Data Science Handbook](https://tanthiamhuat.files.wordpress.com/2018/04/pythondatasciencehandbook.pdf) - Excellent introductory book.
-
