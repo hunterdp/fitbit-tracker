@@ -1,26 +1,6 @@
 # /usr/bin/python3
 # -*- coding: utf-8 -*-
-# MIT License
 
-# Copyright (c) 2019 David Hunter
-
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
 
 import fitbit
 import inspect
@@ -297,13 +277,13 @@ def is_valid_date(date_to_check):
 def get_heartrate(oauth_client, start_date, time_interval, results_file, save_json):
     """ Retrieve the intraday heartrate data and store to a file.
     Args:
-      oauth_client:  An OAuth2 client id.
-      start_date:    Collect starting at this date
-      time_interval: Time ganualarity to collect. See fitbit documentation
-      results_file:  The name of the file to store results in
-      save_json:     Generate json file
+        oauth_client:  An OAuth2 client id.
+        start_date:    Collect starting at this date
+        time_interval: Time ganualarity to collect. See fitbit documentation
+        results_file:  The name of the file to store results in
+        save_json:     Generate json file
     Returns:
-      A dataframe with the time and values.
+        A dataframe with the time and values.
     """
     hr = oauth_client.intraday_time_series(
         resource='activities/heart',
@@ -328,16 +308,16 @@ def get_heartrate(oauth_client, start_date, time_interval, results_file, save_js
 
 def get_steps(oauth_client, start_date, time_interval, results_file, save_json):
     """Retrieve the step count for the day at the specified interval, store
-       data in a file and returns the data in a panda dataframe.
+        data in a file and returns the data in a panda dataframe.
     Args:
-      oauth_client:  An OAuth2 client id.
-      start_date:    Collect starting at this date
-      time_interval: Time ganualarity to collect. See fitbit documentation
-      results_file:  The name of the file to store results in
-      save_json:     Flag to generate json file
+        oauth_client:  An OAuth2 client id.
+        start_date:    Collect starting at this date
+        time_interval: Time ganualarity to collect. See fitbit documentation
+        results_file:  The name of the file to store results in
+        save_json:     Flag to generate json file
     Returns:
-      A dataframe with the time and values.
-      NB: 2 files are stored each time.
+        A dataframe with the time and values.
+        NB: 2 files are stored each time.
     """
     steps = oauth_client.intraday_time_series(
         resource='activities/steps',
@@ -362,15 +342,15 @@ def get_steps(oauth_client, start_date, time_interval, results_file, save_json):
 
 def get_sleep(oauth_client, start_date, results_file, save_json):
     """ Retrieve the sleep data for the day, store in datafile and return the dataframe.
- 
-      :param oauth_client:     An OAuth2 client id.
-      :param start_date:       Collect starting at this date
-      :param time_interval:    Time ganualarity to collect. See fitbit documentation
-      :param results_file:     The name of the file to store results in
-      :param save_json:        Boolean to save json files as well
-      :param api_ver:          The API version to use (1 or 1.2)
+
+    :param oauth_client:     An OAuth2 client id.
+    :param start_date:       Collect starting at this date
+    :param time_interval:    Time ganualarity to collect. See fitbit documentation
+    :param results_file:     The name of the file to store results in
+    :param save_json:        Boolean to save json files as well
+    :param api_ver:          The API version to use (1 or 1.2)
     
-      :return df:A dataframe with the time and values.
+    :return df:A dataframe with the time and values.
     
     NB: Sleep is actually reported for the next day since it starts
         prior to midnight.  To correct, subtract one day from the date
@@ -445,7 +425,7 @@ if __name__ == '__main__':
     try:
         authd_client = fitbit.Fitbit(data['client_id'], data['client_secret'],access_token=data['access_token'])
         authd_client2 = fitbit.Fitbit(data['client_id'],data['client_secret'],oauth2=True,access_token=data['access_token'],
-                                      refresh_token=data['refresh_token'],refresh_cb=refresh_new_token)
+                                        refresh_token=data['refresh_token'],refresh_cb=refresh_new_token)
 
     except authd_client.exceptions.HTTPUnauthorized:
         print('Please provide latest refresh and access tokens for oauth2. Exiting program.')
